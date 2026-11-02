@@ -51,5 +51,15 @@ export const SUI_CONFIG = {
     maxSlippagePct: Number(process.env.MAX_SLIPPAGE_PCT || 0.5),
     // Polling interval in milliseconds
     checkIntervalMs: Number(process.env.CHECK_INTERVAL_MS || 30000)
+  },
+
+  // Phase 2: Bluefin Delta-Neutral Hedging Parameters
+  hedging: {
+    enabled: process.env.HEDGING_ENABLED !== 'false',
+    market: 'SUI-PERP',
+    targetLeverage: Number(process.env.HEDGE_LEVERAGE || 1.0), // 1x Short
+    deltaDriftTolerancePct: Number(process.env.DELTA_DRIFT_TOLERANCE_PCT || 5.0), // Re-hedge when delta drifts >5%
+    rehedgeMinSuiAmount: Number(process.env.REHEDGE_MIN_SUI_AMOUNT || 10.0), // Minimum adjustment size in SUI
+    fundingRateIntervalHours: 8
   }
 };

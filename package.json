@@ -7,7 +7,8 @@
     "start": "node src/index.mjs",
     "monitor": "node src/index.mjs",
     "monitor:once": "node src/index.mjs --once",
-    "simulate:drift": "node src/index.mjs --once --simulate-drift",
+    "simulate:drift": "node src/index.mjs --simulate-drift",
+    "simulate:hedge": "node src/index.mjs --simulate-hedge",
     "test:sui": "node src/test_connection.mjs"
   },
   "dependencies": {

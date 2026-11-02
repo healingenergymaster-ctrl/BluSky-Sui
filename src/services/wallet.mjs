@@ -54,3 +54,4 @@ export class WalletManager {
 }
 
 export const defaultWallet = new WalletManager();
+

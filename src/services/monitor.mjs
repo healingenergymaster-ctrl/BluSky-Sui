@@ -5,6 +5,7 @@ import { SUI_CONFIG } from '../config.mjs';
 import { TurbosService } from './turbos.mjs';
 import { WalletManager } from './wallet.mjs';
 import { RebalancePtbBuilder } from '../ptb/rebalanceBuilder.mjs';
+import { HedgingEngine } from '../hedging/hedgingEngine.mjs';
 import {
   computeTargetTickRange,
   calculateOptimalSwapForRebalance
@@ -15,6 +16,9 @@ export class PositionMonitor {
     this.turbosService = options.turbosService || new TurbosService();
     this.wallet = options.wallet || new WalletManager();
     this.ptbBuilder = new RebalancePtbBuilder(this.turbosService);
+    this.hedgingEngine = options.hedgingEngine || new HedgingEngine({
+      turbosService: this.turbosService
+    });
     this.isRunning = false;
     this.timer = null;
     this.cycleCount = 0;
@@ -23,9 +27,9 @@ export class PositionMonitor {
   }
 
   /**
-   * Executes a single monitoring and evaluation cycle.
+   * Executes a single monitoring, hedging, and evaluation cycle.
    */
-  async checkOnce() {
+  async checkOnce(simulatedPrice = null) {
     this.cycleCount++;
     const timestamp = new Date().toISOString();
     const ownerAddress = this.wallet.getAddress();
@@ -36,6 +40,10 @@ export class PositionMonitor {
       SUI_CONFIG.targetPositionNft,
       ownerAddress
     );
+
+    if (simulatedPrice !== null) {
+      analysis.pool.currentPrice = simulatedPrice;
+    }
 
     const record = {
       cycle: this.cycleCount,
@@ -51,7 +59,14 @@ export class PositionMonitor {
       actionTaken: 'HOLD'
     };
 
-    // 2. Evaluate Rebalance Action
+    // 2. Evaluate Delta-Neutral Hedging (Phase 2)
+    let hedgeReport = null;
+    if (SUI_CONFIG.hedging.enabled) {
+      hedgeReport = await this.hedgingEngine.evaluateAndHedge(analysis, simulatedPrice);
+      record.hedgeReport = hedgeReport;
+    }
+
+    // 3. Evaluate CLMM Tick Rebalance Action
     if (analysis.shouldRebalance) {
       // Calculate new optimal target range
       const targetRange = computeTargetTickRange(
@@ -99,10 +114,10 @@ export class PositionMonitor {
     if (this.history.length > 50) this.history.shift();
 
     if (this.onEvent) {
-      this.onEvent(record, analysis);
+      this.onEvent(record, analysis, hedgeReport);
     }
 
-    return { record, analysis };
+    return { record, analysis, hedgeReport };
   }
 
   /**
