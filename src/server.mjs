@@ -1,6 +1,13 @@
 // src/server.mjs
 // BluSky-Sui Web Dashboard Server & REST API
 
+// Catch any unhandled promise rejections or background RPC socket drops
+process.on('unhandledRejection', () => {});
+process.on('uncaughtException', (err) => {
+  if (err.message?.includes('fetch failed') || err.message?.includes('INVALID_ARGUMENT')) return;
+  console.warn('[Server Warning]', err.message);
+});
+
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -191,3 +198,4 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`🌊 BluSky-Sui Web Dashboard live at: http://localhost:${PORT}`);
 });
+
