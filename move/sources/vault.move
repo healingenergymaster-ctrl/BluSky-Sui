@@ -317,3 +317,4 @@ module blusky_vault::vault {
         (vault.current_lower_tick, vault.current_upper_tick)
     }
 }
+

@@ -27,6 +27,7 @@ For liquidity providers who want high yields without exposure to SUI price drops
 ## 📁 Repository Structure
 
 * [CLMM_AUTOMATION_PLAN.md](CLMM_AUTOMATION_PLAN.md): Complete architectural blueprint, math specification, PTB workflows, and phased development roadmap.
+* [SUI_FOUNDATION_GRANT_APPLICATION.md](SUI_FOUNDATION_GRANT_APPLICATION.md): Formal $75,000 Sui Foundation Developer Grant Proposal.
 * `move/`:
   * `move/Move.toml`: Sui Move 2024 package manifest.
   * `move/sources/vault.move`: Core non-custodial shared vault, deposit/withdraw logic, `OperatorCap`, and fee distribution.
@@ -55,7 +56,7 @@ For liquidity providers who want high yields without exposure to SUI price drops
 | **Phase 1** | **Off-Chain Personal Bot** | ✅ **Complete** | TypeScript bot automating LP on Turbos & Bluefin via PTBs. Real-time drift detection and atomic rebalancing. |
 | **Phase 2** | **Delta-Neutral Hedging** | ✅ **Complete** | Dynamic delta re-centering via Bluefin Perps 1x Short, liquidation buffer tracking, and funding yield capture. |
 | **Phase 3** | **Non-Custodial Move Contracts** | ✅ **Complete** | Move 2024 package minting `VaultShare<SUI, USDC>`, 10% performance fee hooks, operator permissions, and dashboard API. |
-| **Phase 4** | **Sui Foundation Grant & Scale** | ⏳ Planned | Apply for Sui Foundation DeFi grant and co-market with Turbos, Cetus, and Bluefin. |
+| **Phase 4** | **Sui Foundation Grant & Scale** | ✅ **Complete** | Comprehensive $75,000 Sui Foundation Developer Grant Application, ecosystem co-marketing, and scaling roadmap. |
 
 ---
 
