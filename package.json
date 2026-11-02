@@ -9,6 +9,7 @@
     "monitor:once": "node src/index.mjs --once",
     "simulate:drift": "node src/index.mjs --simulate-drift",
     "simulate:hedge": "node src/index.mjs --simulate-hedge",
+    "vault": "node src/index.mjs --vault",
     "test:sui": "node src/test_connection.mjs"
   },
   "dependencies": {

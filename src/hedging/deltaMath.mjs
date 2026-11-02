@@ -163,3 +163,4 @@ export function computeMarketNeutralApy(lpFeeApr = 100.0, fundingRate8h = 0.0001
     isFundingYielding: fundingRate8h >= 0
   };
 }
+

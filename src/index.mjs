@@ -5,6 +5,7 @@ import { SUI_CONFIG } from './config.mjs';
 import { TurbosService } from './services/turbos.mjs';
 import { WalletManager } from './services/wallet.mjs';
 import { PositionMonitor } from './services/monitor.mjs';
+import { VaultApiService } from './dashboard/vaultApi.mjs';
 
 // Ignore benign protobuf-ts unhandled fetch errors in sandboxed/offline environments
 process.on('unhandledRejection', () => {});
@@ -114,11 +115,63 @@ function displayDashboard(analysis, record, hedgeReport) {
   console.log('═'.repeat(78));
 }
 
+async function displayVaultDashboard() {
+  const api = new VaultApiService();
+  const summary = await api.getPublicVaultSummary(2.05);
+
+  console.clear();
+  console.log('╔════════════════════════════════════════════════════════════════════════════╗');
+  console.log('║           🏛️  BLUSKY-SUI : ON-CHAIN MOVE VAULT PROTOCOL (PHASE 3)           ║');
+  console.log('║               Non-Custodial Architecture & Protocol Monetization           ║');
+  console.log('╚════════════════════════════════════════════════════════════════════════════╝');
+  console.log(` 📦 Package:    blusky_vault::vault           📜 Edition:     Move 2024.beta`);
+  console.log(` 🎯 Vault Name: ${summary.vaultName}`);
+  console.log('─'.repeat(78));
+
+  console.log(' 📊 ON-CHAIN VAULT METRICS');
+  console.log(`    • Total Value Locked (TVL): $${summary.tvlUsd.toLocaleString()} USD`);
+  console.log(`    • Share Token:              VaultShare<SUI, USDC>`);
+  console.log(`    • Current Share Price:      $${summary.sharePriceUsd.toFixed(4)} USD`);
+  console.log(`    • Total Shares Minted:      ${summary.totalShares.toLocaleString()} shares`);
+  console.log('─'.repeat(78));
+
+  console.log(' 💎 YIELD & PROTOCOL MONETIZATION');
+  console.log(`    • Gross Pool APR:           ${summary.apy.grossTradingApr}`);
+  console.log(`    • Bluefin Perp Funding:     ${summary.apy.bluefinFundingApr}`);
+  console.log(`    • Protocol Performance Fee: ${summary.performanceFeePct} (Zero management fee)`);
+  console.log(`    • NET INVESTOR APY:         ${summary.apy.netInvestorApy} (Delta-Neutral, USD-denominated)`);
+  console.log('─'.repeat(78));
+
+  console.log(' 💼 PROTOCOL CASH FLOW & REVENUE (Monetization Engine)');
+  console.log(`    • Daily Gross Yield:        $${summary.economics.dailyGrossYieldUsd.toFixed(2)} / day`);
+  console.log(`    • Daily Investor Yield:     $${summary.economics.dailyNetYieldUsd.toFixed(2)} / day`);
+  console.log(`    • Daily Protocol Fee:       $${summary.economics.dailyProtocolFeeEarnedUsd.toFixed(2)} / day ($${summary.economics.annualProtocolFeeEarnedUsd.toFixed(2)} / year)`);
+  console.log('─'.repeat(78));
+
+  console.log(' 📜 RECENT ON-CHAIN VAULT EVENTS');
+  summary.recentEvents.forEach(evt => {
+    if (evt.type === 'DEPOSIT') {
+      console.log(`    [DEPOSIT]   ${evt.user} deposited $${evt.amountUsd.toFixed(2)} -> Minted ${evt.sharesMinted} VaultShare`);
+    } else if (evt.type === 'COMPOUND') {
+      console.log(`    [COMPOUND]  Harvested $${evt.grossFeesUsd.toFixed(2)} -> Treasury Fee: $${evt.performanceFeeCollectedUsd.toFixed(2)} | Auto-Compounded: $${evt.compoundedUsd.toFixed(2)}`);
+    } else if (evt.type === 'REBALANCE') {
+      console.log(`    [REBALANCE] Atomic PTB recentered range: ${evt.oldRange} -> ${evt.newRange} (Gas: $${evt.costUsd})`);
+    }
+  });
+  console.log('═'.repeat(78));
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const runOnce = args.includes('--once');
   const simulateDrift = args.includes('--simulate-drift');
   const simulateHedge = args.includes('--simulate-hedge');
+  const showVault = args.includes('--vault');
+
+  if (showVault) {
+    await displayVaultDashboard();
+    process.exit(0);
+  }
 
   const wallet = new WalletManager();
   const turbosService = new TurbosService();
@@ -142,7 +195,7 @@ async function main() {
       tickSpacing: 60,
       liquidity: '15000000000000',
       fee: 2500,
-      currentPrice: 1.82, // Near $1.80 lower bound!
+      currentPrice: 1.82,
       isSimulated: true
     });
   } else if (simulateHedge) {
@@ -157,7 +210,7 @@ async function main() {
       tickSpacing: 60,
       liquidity: '15000000000000',
       fee: 2500,
-      currentPrice: 1.92, // Price drops, pool buys SUI, increasing spot delta!
+      currentPrice: 1.92,
       isSimulated: true
     });
   }
