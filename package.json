@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
+    "web": "node src/server.mjs",
+    "server": "node src/server.mjs",
     "monitor": "node src/index.mjs",
     "monitor:once": "node src/index.mjs --once",
     "simulate:drift": "node src/index.mjs --simulate-drift",

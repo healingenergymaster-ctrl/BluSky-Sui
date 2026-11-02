@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BluSky-Sui | Autonomous CLMM & Delta-Neutral Vaults</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #070b14;
+      --card-bg: rgba(15, 23, 42, 0.75);
+      --card-border: rgba(56, 189, 248, 0.15);
+      --card-hover: rgba(56, 189, 248, 0.25);
+      --cyan: #22d3ee;
+      --blue: #38bdf8;
+      --indigo: #6366f1;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
+      color: var(--text-main);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-glow {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+    }
+
+    .brand-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #ffffff, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .badges {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-network {
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--cyan);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .badge-sim {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* Top Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      padding: 20px;
+      transition: all 0.2s ease;
+    }
+
+    .stat-card:hover {
+      border-color: var(--card-hover);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--cyan);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+
+    /* Main Dashboard Layout */
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 992px) {
+      .dashboard-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .panel-title {
+      font-size: 17px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Range Gauge */
+    .range-box {
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 14px;
+      padding: 20px;
+      margin: 16px 0;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .range-prices {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .progress-track {
+      height: 12px;
+      background: #1e293b;
+      border-radius: 9999px;
+      position: relative;
+      overflow: visible;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0284c7, #22d3ee);
+      border-radius: 9999px;
+      transition: width 0.4s ease;
+    }
+
+    .progress-marker {
+      position: absolute;
+      top: -6px;
+      width: 24px;
+      height: 24px;
+      background: #ffffff;
+      border: 3px solid #0284c7;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.8);
+      transition: left 0.4s ease;
+    }
+
+    .range-info {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    /* Hedging Section */
+    .hedge-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .hedge-tile {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .hedge-tile-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .hedge-tile-val {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Simulation Control Buttons */
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #04111d;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.3);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.05);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--cyan);
+    }
+
+    /* Deposit Calculator */
+    .calc-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #ffffff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      outline: none;
+    }
+
+    .calc-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+    }
+
+    .calc-results {
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .calc-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .calc-row:last-child {
+      border-bottom: none;
+    }
+
+    /* Audit Log */
+    .event-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .event-item {
+      background: rgba(0, 0, 0, 0.25);
+      border-left: 3px solid var(--blue);
+      border-radius: 0 10px 10px 0;
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="logo-glow">🌊</div>
+        <div>
+          <div class="brand-title">BluSky-Sui</div>
+          <div class="brand-subtitle">Autonomous CLMM & Delta-Neutral Liquidity Vaults</div>
+        </div>
+      </div>
+      <div class="badges">
+        <div class="badge badge-network">● Sui Mainnet</div>
+        <div class="badge badge-sim">⚙️ DRY_RUN Simulation</div>
+      </div>
+    </header>
+
+    <!-- Top Key Metrics -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Vault TVL <span style="color: var(--green);">● Active</span></div>
+        <div class="stat-value" id="valTvl">$19,999.90</div>
+        <div class="stat-sub">SUI / Circle USDC Pair</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Net Investor APY <span>✨ Zero Beta</span></div>
+        <div class="stat-value" style="color: var(--cyan);" id="valNetApy">109.4%</div>
+        <div class="stat-sub">105% Fees + 16.4% Funding - 10% Fee</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">VaultShare Price <span>On-Chain</span></div>
+        <div class="stat-value" id="valSharePrice">$1.0000</div>
+        <div class="stat-sub">20,000 Shares Minted</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Protocol 24h Yield <span>10% Performance</span></div>
+        <div class="stat-value" style="color: var(--green);" id="valProtocolFee">$5.75</div>
+        <div class="stat-sub">~$2,100 / year projected</div>
+      </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="dashboard-layout">
+      <!-- Left Column: CLMM & Hedging Core -->
+      <div>
+        <!-- CLMM Position Health Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">🎯 Turbos CLMM Active Range Monitor</div>
+            <div class="badge" id="clmmBadge" style="background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3);">
+              ● OPTIMAL 100% APR ZONE
+            </div>
+          </div>
+
+          <div class="range-box">
+            <div class="range-prices">
+              <span>Lower Bound: <strong id="valLowerPrice">$1.8041</strong></span>
+              <span>Spot SUI: <strong id="valSpotPrice" style="color: #ffffff; font-size: 15px;">$2.0500</strong></span>
+              <span>Upper Bound: <strong id="valUpperPrice">$2.2124</strong></span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="rangeFill" style="width: 60.2%;"></div>
+              <div class="progress-marker" id="rangeMarker" style="left: 60.2%;"></div>
+            </div>
+            <div class="range-info">
+              <span style="color: var(--text-muted);">Current Band Position: <strong id="valProgressPct">60.2%</strong></span>
+              <span style="color: var(--text-muted);">Nearest Boundary Distance: <strong id="valBoundaryDist">39.8%</strong></span>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 13px; padding-top: 8px;">
+            <span>Unclaimed Accrued Fees: <strong id="valFees" style="color: var(--green);">$59.92 USD</strong> (18.5 SUI + 22.0 USDC)</span>
+            <span>Range Status: <strong id="valRangeAction">HOLDING (Optimal)</strong></span>
+          </div>
+
+          <!-- Rebalance PTB notification banner if triggered -->
+          <div id="rebalanceNotice" style="display: none; margin-top: 16px; padding: 14px; border-radius: 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3);">
+            <div style="font-weight: 700; color: var(--yellow); margin-bottom: 4px;">⚡ Atomic PTB Rebalance Triggered!</div>
+            <div style="font-size: 12px; color: var(--text-main);">
+              Executed 6-step atomic block: Harvested fees -> Withdrew 100% capital -> Swapped optimal ratio -> Minted new position at <strong>$1.6380 <──> $2.0020</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Delta-Neutral Hedging Layer Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">🛡️ Bluefin Perps Delta-Neutral Hedging</div>
+            <div class="badge" id="hedgeBadge" style="background: rgba(34, 211, 238, 0.15); color: var(--cyan); border: 1px solid rgba(34, 211, 238, 0.3);">
+              ✅ STRICTLY DELTA-NEUTRAL
+            </div>
+          </div>
+
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+            Shorting 1x SUI on Bluefin Perps dynamically offsets spot SUI pool holdings, delivering pure fee yields with zero market beta.
+          </p>
+
+          <div class="hedge-grid">
+            <div class="hedge-tile">
+              <div class="hedge-tile-title">Spot SUI Delta (&Delta;<sub>spot</sub>)</div>
+              <div class="hedge-tile-val" id="valSpotDelta" style="color: var(--blue);">+371.65 SUI</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valSpotDeltaUsd">$761.88 USD</div>
+            </div>
+            <div class="hedge-tile">
+              <div class="hedge-tile-title">Bluefin Short Size (1x Short)</div>
+              <div class="hedge-tile-val" id="valPerpShort" style="color: var(--cyan);">-371.73 SUI</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valPerpShortUsd">$762.04 USD</div>
+            </div>
+            <div class="hedge-tile">
+              <div class="hedge-tile-title">Net Portfolio Delta (&Delta;<sub>net</sub>)</div>
+              <div class="hedge-tile-val" id="valNetDelta" style="color: var(--green);">-0.08 SUI</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valNetDeltaUsd">$-0.17 USD (&Delta; drift: 0.02%)</div>
+            </div>
+            <div class="hedge-tile">
+              <div class="hedge-tile-title">8h Perp Funding Yield</div>
+              <div class="hedge-tile-val" id="valFundingRate" style="color: var(--green);">+16.4% APR</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Earned by Shorts from Longs</div>
+            </div>
+          </div>
+
+          <div id="hedgeNotice" style="display: none; margin-top: 16px; padding: 14px; border-radius: 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3);">
+            <div style="font-weight: 700; color: var(--cyan); margin-bottom: 4px;">⚡ Dynamic Delta Re-Hedge Executed!</div>
+            <div style="font-size: 12px; color: var(--text-main);" id="hedgeNoticeText">
+              Adjusted short position size on Bluefin Perps to restore strict market neutrality.
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Market Stress Test Controls -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">🧪 Live Market Stress-Test Simulation Controls</div>
+            <span style="font-size: 12px; color: var(--text-muted);">Test automated agent responses</span>
+          </div>
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Trigger simulated price shocks to observe atomic PTB rebalancing and Bluefin dynamic re-hedging live:
+          </p>
+          <div class="controls">
+            <button class="btn btn-outline" onclick="triggerSimulation('normal')">
+              🟢 Baseline Market ($2.05)
+            </button>
+            <button class="btn btn-outline" onclick="triggerSimulation('hedge')">
+              📉 SUI Price Drop ($1.92 - Test Dynamic Hedge)
+            </button>
+            <button class="btn btn-outline" onclick="triggerSimulation('drift')">
+              🚨 Severe Drift ($1.82 - Test Atomic Rebalance PTB)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Deposit Calculator & Events -->
+      <div>
+        <!-- Deposit Calculator -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">💰 Deposit Calculator</div>
+          </div>
+          <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+            Deposit Amount (USDC):
+          </label>
+          <input type="number" class="calc-input" id="calcInput" value="5000" min="100" step="100" oninput="calculateDeposit()">
+
+          <div class="calc-results">
+            <div class="calc-row">
+              <span style="color: var(--text-muted);">VaultShares Received:</span>
+              <strong id="calcShares">5,000.00 Shares</strong>
+            </div>
+            <div class="calc-row">
+              <span style="color: var(--text-muted);">Net Investor APY:</span>
+              <strong style="color: var(--cyan);">109.4%</strong>
+            </div>
+            <div class="calc-row">
+              <span style="color: var(--text-muted);">Projected Monthly Cash Flow:</span>
+              <strong style="color: var(--green);" id="calcMonthly">$455.83 / mo</strong>
+            </div>
+            <div class="calc-row">
+              <span style="color: var(--text-muted);">Projected Annual Yield:</span>
+              <strong style="color: var(--green);" id="calcAnnual">$5,470.00 / yr</strong>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="simulateDepositAction()">
+            ⚡ Simulate Deposit (Mint VaultShare)
+          </button>
+        </div>
+
+        <!-- Recent Events Feed -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📜 On-Chain Vault Audit Feed</div>
+          </div>
+          <div class="event-list" id="eventList">
+            <div class="event-item">
+              <div class="event-header">
+                <span>COMPOUND</span>
+                <span>12 hrs ago</span>
+              </div>
+              <div>Harvested <strong>$71.40</strong> -> Treasury Fee: $7.14 | Auto-Compounded: $64.26</div>
+            </div>
+            <div class="event-item">
+              <div class="event-header">
+                <span>REBALANCE</span>
+                <span>4 hrs ago</span>
+              </div>
+              <div>Atomic PTB recentered range: $1.80 - $2.21 -> $1.84 - $2.26 (Gas: $0.008)</div>
+            </div>
+            <div class="event-item">
+              <div class="event-header">
+                <span>DEPOSIT</span>
+                <span>1 day ago</span>
+              </div>
+              <div>0x9482...49e1 deposited $5,000.00 -> Minted 5,000 VaultShare</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        updateUI(data);
+      } catch (err) {
+        console.error('Error fetching status:', err);
+      }
+    }
+
+    function updateUI(data) {
+      // Top Metrics
+      document.getElementById('valTvl').textContent = '$' + data.vault.tvlUsd.toLocaleString();
+      document.getElementById('valNetApy').textContent = data.vault.apy.netInvestorApy;
+      document.getElementById('valSharePrice').textContent = '$' + data.vault.sharePriceUsd.toFixed(4);
+      document.getElementById('valProtocolFee').textContent = '$' + data.vault.economics.dailyProtocolFeeEarnedUsd.toFixed(2);
+
+      // CLMM Range
+      document.getElementById('valLowerPrice').textContent = '$' + data.clmm.lowerPrice.toFixed(4);
+      document.getElementById('valSpotPrice').textContent = '$' + data.clmm.price.toFixed(4);
+      document.getElementById('valUpperPrice').textContent = '$' + data.clmm.upperPrice.toFixed(4);
+      document.getElementById('valProgressPct').textContent = data.clmm.progressPct.toFixed(1) + '%';
+      document.getElementById('valBoundaryDist').textContent = data.clmm.nearestBoundaryPct.toFixed(1) + '%';
+      document.getElementById('valFees').textContent = '$' + data.clmm.accruedFeesUsd.toFixed(2) + ' USD';
+      
+      const fill = document.getElementById('rangeFill');
+      const marker = document.getElementById('rangeMarker');
+      const progress = Math.max(0, Math.min(100, data.clmm.progressPct));
+      fill.style.width = progress + '%';
+      marker.style.left = progress + '%';
+
+      // CLMM Status Badge & Banner
+      const clmmBadge = document.getElementById('clmmBadge');
+      const rebalanceNotice = document.getElementById('rebalanceNotice');
+      if (data.clmm.shouldRebalance) {
+        clmmBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+        clmmBadge.style.color = '#f59e0b';
+        clmmBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+        clmmBadge.textContent = '⚠️ DRIFT THRESHOLD REACHED';
+        rebalanceNotice.style.display = 'block';
+        document.getElementById('valRangeAction').textContent = 'REBALANCED VIA PTB';
+      } else {
+        clmmBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        clmmBadge.style.color = '#10b981';
+        clmmBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        clmmBadge.textContent = '● OPTIMAL 100% APR ZONE';
+        rebalanceNotice.style.display = 'none';
+        document.getElementById('valRangeAction').textContent = 'HOLDING (Optimal)';
+      }
+
+      // Hedging Metrics
+      document.getElementById('valSpotDelta').textContent = '+' + data.hedging.spotDeltaSui.toFixed(2) + ' SUI';
+      document.getElementById('valSpotDeltaUsd').textContent = '$' + data.hedging.spotDeltaUsd.toFixed(2) + ' USD';
+      document.getElementById('valPerpShort').textContent = '-' + data.hedging.perpShortSizeSui.toFixed(2) + ' SUI';
+      document.getElementById('valPerpShortUsd').textContent = '$' + data.hedging.perpShortNotionalUsd.toFixed(2) + ' USD';
+      document.getElementById('valNetDelta').textContent = (data.hedging.netDeltaSui >= 0 ? '+' : '') + data.hedging.netDeltaSui.toFixed(2) + ' SUI';
+      document.getElementById('valNetDeltaUsd').textContent = (data.hedging.netDeltaUsd >= 0 ? '+' : '') + '$' + data.hedging.netDeltaUsd.toFixed(2) + ' USD (Δ drift: ' + data.hedging.deltaDriftPct.toFixed(2) + '%)';
+
+      const hedgeBadge = document.getElementById('hedgeBadge');
+      const hedgeNotice = document.getElementById('hedgeNotice');
+      if (data.hedging.adjustmentResult) {
+        hedgeBadge.style.background = 'rgba(56, 189, 248, 0.2)';
+        hedgeBadge.textContent = '⚡ RE-HEDGED';
+        hedgeNotice.style.display = 'block';
+        document.getElementById('hedgeNoticeText').textContent = data.hedging.adjustmentResult.description;
+      } else {
+        hedgeBadge.style.background = 'rgba(34, 211, 238, 0.15)';
+        hedgeBadge.textContent = '✅ STRICTLY DELTA-NEUTRAL';
+        hedgeNotice.style.display = 'none';
+      }
+    }
+
+    async function triggerSimulation(scenario) {
+      try {
+        const res = await fetch('/api/simulate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenario })
+        });
+        const json = await res.json();
+        updateUI(json.state);
+      } catch (err) {
+        console.error('Simulation error:', err);
+      }
+    }
+
+    function calculateDeposit() {
+      const amount = parseFloat(document.getElementById('calcInput').value || 0);
+      const apy = 1.094; // 109.4%
+      const annual = amount * apy;
+      const monthly = annual / 12;
+
+      document.getElementById('calcShares').textContent = amount.toLocaleString() + '.00 Shares';
+      document.getElementById('calcMonthly').textContent = '$' + monthly.toFixed(2) + ' / mo';
+      document.getElementById('calcAnnual').textContent = '$' + annual.toFixed(2) + ' / yr';
+    }
+
+    function simulateDepositAction() {
+      const amount = document.getElementById('calcInput').value;
+      const eventList = document.getElementById('eventList');
+      const newEvt = document.createElement('div');
+      newEvt.className = 'event-item';
+      newEvt.innerHTML = `
+        <div class="event-header">
+          <span>DEPOSIT</span>
+          <span>Just now</span>
+        </div>
+        <div>0xYou deposited <strong>$${parseFloat(amount).toLocaleString()} USDC</strong> -> Minted ${parseFloat(amount).toLocaleString()} VaultShare</div>
+      `;
+      eventList.insertBefore(newEvt, eventList.firstChild);
+      alert(`🎉 Deposit Simulated!\nMinted ${parseFloat(amount).toLocaleString()} VaultShare<SUI, USDC> tokens to your address.`);
+    }
+
+    // Initial load
+    fetchStatus();
+    calculateDeposit();
+    // Refresh every 10 seconds
+    setInterval(fetchStatus, 10000);
+  </script>
+</body>
+</html>

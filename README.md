@@ -32,7 +32,10 @@ For liquidity providers who want high yields without exposure to SUI price drops
   * `move/Move.toml`: Sui Move 2024 package manifest.
   * `move/sources/vault.move`: Core non-custodial shared vault, deposit/withdraw logic, `OperatorCap`, and fee distribution.
   * `move/sources/events.move`: Move event schemas (`DepositEvent`, `WithdrawEvent`, `RebalanceEvent`, `FeeHarvestedEvent`).
+* `public/`:
+  * `public/index.html`: Responsive Web dApp frontend (interactive CLMM range gauge, Bluefin delta visualizer, 1-click deposit calculator, and live market stress-test simulator).
 * `src/`:
+  * `src/server.mjs`: Lightweight Web dApp server and REST API (`/api/status`, `/api/simulate`, `/api/deposit`).
   * `src/config.mjs`: Central configuration, RPC endpoints, pool IDs, strategy & hedging parameters.
   * `src/services/wallet.mjs`: Multi-format Sui keypair loader (`suiprivkey...`, hex, base64) with read-only fallback.
   * `src/strategy/rebalanceMath.mjs`: Pure CLMM math (sqrtPrice <-> price, tick spacing alignment, drift percentage, optimal swap ratio calculation, economic viability validation).
@@ -74,7 +77,10 @@ cp .env.example .env
 
 ### 3. Run Commands
 ```bash
-# View on-chain Move Vault metrics, TVL, and protocol fee revenue
+# Launch the Interactive Web dApp Frontend (open http://localhost:3000 in browser)
+npm run web
+
+# View on-chain Move Vault metrics, TVL, and protocol fee revenue in terminal
 npm run vault
 
 # Run a single inspection & hedge evaluation cycle

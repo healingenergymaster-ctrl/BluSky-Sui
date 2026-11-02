@@ -192,3 +192,4 @@ BluSky-Sui provides the missing infrastructural link required to transition Sui'
 With the core off-chain execution daemon, atomic PTB builder, and Move 2024 contract architecture already implemented and validated, grant support from the Sui Foundation will accelerate smart contract auditing, dApp deployment, and ecosystem liquidity scaling.
 
 We look forward to collaborating with the Sui Foundation to solidify Sui as the premier DeFi execution layer in Web3.
+
