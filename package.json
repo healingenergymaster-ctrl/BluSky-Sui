@@ -1,0 +1,19 @@
+{
+  "name": "blusky-sui",
+  "version": "1.0.0",
+  "description": "Autonomous CLMM Liquidity Vaults & PTB Execution Protocol on Sui Network",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "monitor": "node src/index.mjs",
+    "monitor:once": "node src/index.mjs --once",
+    "simulate:drift": "node src/index.mjs --once --simulate-drift",
+    "test:sui": "node src/test_connection.mjs"
+  },
+  "dependencies": {
+    "@mysten/sui": "^2.38.0",
+    "turbos-clmm-sdk": "^4.0.2",
+    "bignumber.js": "^9.1.2",
+    "dotenv": "^16.4.5"
+  }
+}
