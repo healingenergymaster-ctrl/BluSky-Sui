@@ -110,7 +110,7 @@ export class VaultContractService {
    * @param {string} vaultId 
    * @param {number} currentPrice SUI spot price
    */
-  async getVaultMetrics(vaultId = '0x_simulated_blusky_vault', currentPrice = 2.05) {
+  async getVaultMetrics(vaultId = '0x_simulated_blusky_vault', currentPrice = 0.895) {
     // Calibrated simulation for $20,000 pilot vault
     const totalShares = 20000;
     const balanceA_Sui = 4878; // ~$10,000 SUI

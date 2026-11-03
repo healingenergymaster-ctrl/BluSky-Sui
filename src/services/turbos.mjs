@@ -21,6 +21,16 @@ import {
   evaluateEconomicViability
 } from '../strategy/rebalanceMath.mjs';
 
+export async function fetchLiveSuiPrice() {
+  try {
+    const res = await fetch('https://api.coinbase.com/v2/prices/SUI-USD/spot', { signal: AbortSignal.timeout(2500) });
+    const data = await res.json();
+    const p = parseFloat(data?.data?.amount);
+    if (!isNaN(p) && p > 0) return p;
+  } catch (err) {}
+  return 0.895; // Real current SUI market baseline
+}
+
 // Standard Turbos Mainnet Contract Objects & Package IDs
 export const TURBOS_MAINNET_CONTRACTS = {
   PackageId: '0x91bfbc386a41afcfd9b2533058d7e915a1d3829089cc268ff4333d54d6339ca1',
@@ -86,8 +96,8 @@ export class TurbosService {
         isSimulated: false
       };
     } catch (err) {
-      // In sandbox/offline mode, return calibrated simulation state for SUI/USDC
-      const simulatedPrice = 2.05; // Current SUI/USDC baseline
+      // In sandbox/offline mode, return calibrated simulation state using real market price
+      const simulatedPrice = await fetchLiveSuiPrice();
       const simulatedSqrtPrice = this.turbosSdk.math.priceToSqrtPriceX64(
         simulatedPrice,
         SUI_CONFIG.decimals.SUI,
@@ -100,7 +110,7 @@ export class TurbosService {
         coinTypeB: SUI_CONFIG.coins.USDC,
         feeType: `${TURBOS_MAINNET_CONTRACTS.PackageId}::fee::Fee2500`,
         sqrtPriceX64: simulatedSqrtPrice,
-        currentTick: -62040,
+        currentTick: this.turbosSdk.math.priceToInitializableTickIndex(simulatedPrice, 9, 6, 60),
         tickSpacing: 60,
         liquidity: '15000000000000',
         fee: 2500, // 0.25%
@@ -136,15 +146,15 @@ export class TurbosService {
       }
     }
 
-    // Provide calibrated simulated $20,000 position
+    // Provide calibrated simulated position around real SUI price (~$0.80 - $1.00)
     return {
       nftId: nftId || '0x_simulated_position_nft_sui_usdc',
       poolId: SUI_CONFIG.pools.turbos_sui_usdc,
-      lowerTick: -63180, // ~$1.80 USDC
-      upperTick: -61140, // ~$2.21 USDC
-      liquidity: '450000000000',
-      tokensOwedA: '15000000000', // 15 SUI accrued fees (~$30)
-      tokensOwedB: '25000000',    // 25 USDC accrued fees (~$25)
+      lowerTick: -71280, // ~$0.8026 USDC
+      upperTick: -69060, // ~$1.0021 USDC
+      liquidity: '950000000000',
+      tokensOwedA: '25000000000', // 25 SUI accrued fees (~$22.40)
+      tokensOwedB: '35000000',    // 35 USDC accrued fees (~$35.00)
       isSimulated: true
     };
   }
@@ -183,9 +193,9 @@ export class TurbosService {
       }
     }
 
-    // Calibrated simulation: 18.5 SUI + 22.0 USDC (~$60 USD accrued)
-    const feeA_Sui = 18.5;
-    const feeB_Usdc = 22.0;
+    // Calibrated simulation: 25.0 SUI + 35.0 USDC (~$57.40 USD accrued)
+    const feeA_Sui = 25.0;
+    const feeB_Usdc = 35.0;
     const totalFeesUsd = feeA_Sui * currentPrice + feeB_Usdc;
 
     return {

@@ -25,7 +25,7 @@ export class BluefinService {
     // Pre-initialize initial hedge if specified or simulate calibrated active position
     if (options.initialShortSizeSui) {
       this.account.shortSizeSui = options.initialShortSizeSui;
-      this.account.entryPrice = options.entryPrice || 2.05;
+      this.account.entryPrice = options.entryPrice || 0.895;
       this.account.marginUsdc = this.account.shortSizeSui * this.account.entryPrice;
     }
   }
@@ -34,7 +34,7 @@ export class BluefinService {
    * Fetches current perpetual short position status.
    * @param {number} currentPrice 
    */
-  async getPerpPosition(currentPrice = 2.05) {
+  async getPerpPosition(currentPrice = 0.895) {
     const size = this.account.shortSizeSui;
     const entry = this.account.entryPrice;
 
@@ -126,7 +126,7 @@ export class BluefinService {
   /**
    * Simulates funding rate accrual payment.
    */
-  accrueFunding(elapsedHours = 8, currentPrice = 2.05) {
+  accrueFunding(elapsedHours = 8, currentPrice = 0.895) {
     if (this.account.shortSizeSui <= 0) return 0;
     const periods = elapsedHours / 8;
     const notional = this.account.shortSizeSui * currentPrice;

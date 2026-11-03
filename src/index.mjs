@@ -117,7 +117,7 @@ function displayDashboard(analysis, record, hedgeReport) {
 
 async function displayVaultDashboard() {
   const api = new VaultApiService();
-  const summary = await api.getPublicVaultSummary(2.05);
+  const summary = await api.getPublicVaultSummary(0.895);
 
   console.clear();
   console.log('╔════════════════════════════════════════════════════════════════════════════╗');

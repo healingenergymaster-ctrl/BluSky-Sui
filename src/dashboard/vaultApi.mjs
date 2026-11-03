@@ -42,7 +42,7 @@ export class VaultApiService {
    * Returns complete high-level statistics for the public web vault page.
    * @param {number} currentPrice 
    */
-  async getPublicVaultSummary(currentPrice = 2.05) {
+  async getPublicVaultSummary(currentPrice = 0.895) {
     const vaultState = await this.vaultService.getVaultMetrics('0x_blusky_sui_usdc_vault', currentPrice);
     
     // Gross APR ~105%
@@ -94,7 +94,7 @@ export class VaultApiService {
    * @param {number} depositUsdcAmount 
    * @param {number} currentPrice 
    */
-  async simulateDeposit(depositUsdcAmount, currentPrice = 2.05) {
+  async simulateDeposit(depositUsdcAmount, currentPrice = 0.895) {
     const summary = await this.getPublicVaultSummary(currentPrice);
     const sharesToReceive = depositUsdcAmount / summary.sharePriceUsd;
     const projectedAnnualEarningsUsd = depositUsdcAmount * (parseFloat(summary.apy.netInvestorApy) / 100);

@@ -14,7 +14,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { SUI_CONFIG } from './config.mjs';
 import { VaultApiService } from './dashboard/vaultApi.mjs';
-import { TurbosService } from './services/turbos.mjs';
+import { TurbosService, fetchLiveSuiPrice } from './services/turbos.mjs';
 import { HedgingEngine } from './hedging/hedgingEngine.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,20 +25,20 @@ const PORT = process.env.PORT || 3000;
 
 // State management for interactive demo
 let currentScenario = 'normal'; // 'normal', 'drift', 'hedge'
-let currentPrice = 2.05;
 
 const vaultApi = new VaultApiService();
 const turbosService = new TurbosService();
 const hedgingEngine = new HedgingEngine({ turbosService });
 
 async function getLiveState() {
-  let simPrice = currentPrice;
+  const livePrice = await fetchLiveSuiPrice();
+  let simPrice = livePrice;
   if (currentScenario === 'drift') {
-    simPrice = 1.82;
+    simPrice = 0.78; // Below $0.8026 lower bound!
   } else if (currentScenario === 'hedge') {
-    simPrice = 1.92;
+    simPrice = 0.83; // Noticeable drop from ~$0.895
   } else {
-    simPrice = 2.05;
+    simPrice = livePrice;
   }
 
   // 1. Analyze Position
@@ -53,6 +53,9 @@ async function getLiveState() {
 
   // 3. Vault Summary
   const vaultSummary = await vaultApi.getPublicVaultSummary(simPrice);
+
+  const targetLower = Math.round(simPrice * 0.90 * 1000) / 1000;
+  const targetUpper = Math.round(simPrice * 1.10 * 1000) / 1000;
 
   return {
     scenario: currentScenario,
@@ -71,7 +74,7 @@ async function getLiveState() {
       accruedFeesUsdc: clmmAnalysis.accruedFees.feeB_Usdc,
       shouldRebalance: clmmAnalysis.shouldRebalance,
       rebalanceAction: clmmAnalysis.shouldRebalance ? 'REBALANCED_SIMULATED' : 'HOLDING',
-      targetNewBand: clmmAnalysis.shouldRebalance ? { lower: 1.638, upper: 2.002 } : null
+      targetNewBand: clmmAnalysis.shouldRebalance ? { lower: targetLower, upper: targetUpper } : null
     },
     hedging: {
       market: hedgeReport.perpStatus.market,
