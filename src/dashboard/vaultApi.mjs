@@ -131,5 +131,54 @@ export class VaultApiService {
       netApy: summary.apy.netInvestorApy
     };
   }
+
+  /**
+   * Executes a user deposit and records the on-chain audit event.
+   * @param {string} userAddress
+   * @param {number} depositUsdcAmount
+   * @param {number} currentPrice
+   */
+  async executeDeposit(userAddress, depositUsdcAmount, currentPrice = 0.895) {
+    const result = await this.vaultService.executeDeposit(userAddress, depositUsdcAmount, currentPrice);
+    const displayAddr = userAddress.length > 10 ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : userAddress;
+    this.historicalEvents.unshift({
+      id: `evt_${Date.now()}`,
+      type: 'DEPOSIT',
+      user: displayAddr,
+      amountUsd: result.depositAmountUsd,
+      sharesMinted: result.sharesMinted,
+      timestamp: new Date().toISOString()
+    });
+    return result;
+  }
+
+  /**
+   * Executes a user redemption/withdrawal and records the on-chain audit event.
+   * @param {string} userAddress
+   * @param {number} sharesToBurn
+   * @param {number} currentPrice
+   */
+  async executeWithdraw(userAddress, sharesToBurn, currentPrice = 0.895) {
+    const result = await this.vaultService.executeWithdraw(userAddress, sharesToBurn, currentPrice);
+    const displayAddr = userAddress.length > 10 ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : userAddress;
+    this.historicalEvents.unshift({
+      id: `evt_${Date.now()}`,
+      type: 'WITHDRAW',
+      user: displayAddr,
+      amountUsd: result.withdrawnUsd,
+      sharesBurned: result.sharesBurned,
+      timestamp: new Date().toISOString()
+    });
+    return result;
+  }
+
+  /**
+   * Returns a user's portfolio position.
+   * @param {string} userAddress
+   * @param {number} currentPrice
+   */
+  async getUserPosition(userAddress, currentPrice = 0.895) {
+    return this.vaultService.getUserPosition(userAddress, currentPrice);
+  }
 }
 

@@ -30,7 +30,7 @@ const vaultApi = new VaultApiService();
 const turbosService = new TurbosService();
 const hedgingEngine = new HedgingEngine({ turbosService });
 
-async function getLiveState() {
+async function getLiveState(userAddress = null) {
   const livePrice = await fetchLiveSuiPrice();
   let simPrice = livePrice;
   if (currentScenario === 'drift') {
@@ -56,6 +56,11 @@ async function getLiveState() {
 
   const targetLower = Math.round(simPrice * 0.90 * 1000) / 1000;
   const targetUpper = Math.round(simPrice * 1.10 * 1000) / 1000;
+
+  let userPosition = null;
+  if (userAddress) {
+    userPosition = await vaultApi.getUserPosition(userAddress, simPrice);
+  }
 
   return {
     scenario: currentScenario,
@@ -98,6 +103,7 @@ async function getLiveState() {
       netApy: hedgeReport.apyBreakdown.netMarketNeutralApy
     },
     vault: vaultSummary,
+    userPosition,
     timestamp: new Date().toISOString()
   };
 }
@@ -120,9 +126,59 @@ const server = http.createServer(async (req, res) => {
   // --- API Endpoints ---
 
   if (pathname === '/api/status' && req.method === 'GET') {
-    const data = await getLiveState();
+    const address = reqUrl.searchParams.get('address');
+    const data = await getLiveState(address);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(data));
+    return;
+  }
+
+  if (pathname === '/api/user/position' && req.method === 'GET') {
+    const address = reqUrl.searchParams.get('address');
+    const simPrice = (currentScenario === 'drift') ? 0.78 : ((currentScenario === 'hedge') ? 0.83 : await fetchLiveSuiPrice());
+    const position = await vaultApi.getUserPosition(address, simPrice);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, position }));
+    return;
+  }
+
+  if (pathname === '/api/vault/deposit' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const userAddress = payload.userAddress || payload.address;
+        const amountUsdc = parseFloat(payload.amountUsdc || payload.amount || 0);
+        const simPrice = (currentScenario === 'drift') ? 0.78 : ((currentScenario === 'hedge') ? 0.83 : await fetchLiveSuiPrice());
+        const result = await vaultApi.executeDeposit(userAddress, amountUsdc, simPrice);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, result }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  if (pathname === '/api/vault/withdraw' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const userAddress = payload.userAddress || payload.address;
+        const shares = parseFloat(payload.shares || payload.sharesToBurn || 0);
+        const simPrice = (currentScenario === 'drift') ? 0.78 : ((currentScenario === 'hedge') ? 0.83 : await fetchLiveSuiPrice());
+        const result = await vaultApi.executeWithdraw(userAddress, shares, simPrice);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, result }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
     return;
   }
 
@@ -135,7 +191,8 @@ const server = http.createServer(async (req, res) => {
         if (payload.scenario) {
           currentScenario = payload.scenario;
         }
-        const data = await getLiveState();
+        const address = payload.address || null;
+        const data = await getLiveState(address);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, scenario: currentScenario, state: data }));
       } catch (err) {
@@ -153,7 +210,8 @@ const server = http.createServer(async (req, res) => {
       try {
         const payload = JSON.parse(body || '{}');
         const amountUsdc = parseFloat(payload.amountUsdc || 1000);
-        const sim = await vaultApi.simulateDeposit(amountUsdc, currentPrice);
+        const livePrice = await fetchLiveSuiPrice();
+        const sim = await vaultApi.simulateDeposit(amountUsdc, livePrice);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, simulation: sim }));
       } catch (err) {

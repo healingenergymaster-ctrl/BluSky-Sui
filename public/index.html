@@ -12,7 +12,7 @@
       --bg: #070b14;
       --card-bg: rgba(15, 23, 42, 0.75);
       --card-border: rgba(56, 189, 248, 0.15);
-      --card-hover: rgba(56, 189, 248, 0.25);
+      --card-hover: rgba(56, 189, 248, 0.28);
       --cyan: #22d3ee;
       --blue: #38bdf8;
       --indigo: #6366f1;
@@ -42,7 +42,7 @@
     }
 
     .container {
-      max-width: 1280px;
+      max-width: 1320px;
       margin: 0 auto;
       padding: 24px;
     }
@@ -91,10 +91,11 @@
       color: var(--text-muted);
     }
 
-    .badges {
+    .header-actions {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .badge {
@@ -118,6 +119,39 @@
       background: rgba(16, 185, 129, 0.1);
       color: var(--green);
       border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    /* Wallet Button */
+    .wallet-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #04111d;
+      padding: 8px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.3);
+    }
+
+    .wallet-btn:hover {
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .wallet-btn-connected {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #ffffff;
+      box-shadow: none;
+    }
+
+    .wallet-btn-connected:hover {
+      background: rgba(16, 185, 129, 0.25);
     }
 
     /* Top Stats Grid */
@@ -169,12 +203,12 @@
     /* Main Dashboard Layout */
     .dashboard-layout {
       display: grid;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: 1.55fr 1.05fr;
       gap: 24px;
       margin-bottom: 32px;
     }
 
-    @media (max-width: 992px) {
+    @media (max-width: 1040px) {
       .dashboard-layout {
         grid-template-columns: 1fr;
       }
@@ -295,7 +329,7 @@
     }
 
     .btn {
-      padding: 10px 18px;
+      padding: 11px 20px;
       border-radius: 12px;
       font-weight: 600;
       font-size: 13px;
@@ -318,6 +352,17 @@
       transform: translateY(-1px);
     }
 
+    .btn-danger {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+      color: #ffffff;
+      box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-danger:hover {
+      box-shadow: 0 0 24px rgba(239, 68, 68, 0.5);
+      transform: translateY(-1px);
+    }
+
     .btn-outline {
       background: rgba(255, 255, 255, 0.05);
       color: #ffffff;
@@ -329,37 +374,119 @@
       border-color: var(--cyan);
     }
 
-    /* Deposit Calculator */
+    /* Tabs Styling */
+    .tabs-nav {
+      display: flex;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 20px;
+      gap: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.16);
+      color: #ffffff;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Interactive Inputs & Chips */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
     .calc-input {
       width: 100%;
-      background: rgba(0, 0, 0, 0.4);
+      background: rgba(0, 0, 0, 0.45);
       border: 1px solid rgba(56, 189, 248, 0.3);
       color: #ffffff;
       font-family: 'JetBrains Mono', monospace;
       font-size: 18px;
       padding: 14px 16px;
       border-radius: 12px;
-      margin-bottom: 16px;
       outline: none;
+      transition: all 0.2s;
     }
 
     .calc-input:focus {
       border-color: var(--cyan);
-      box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+      box-shadow: 0 0 16px rgba(34, 211, 238, 0.3);
+    }
+
+    .chip-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chip-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--cyan);
+      color: #ffffff;
     }
 
     .calc-results {
-      background: rgba(0, 0, 0, 0.25);
+      background: rgba(0, 0, 0, 0.3);
       border-radius: 12px;
       padding: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
     }
 
     .calc-row {
       display: flex;
       justify-content: space-between;
       font-size: 13px;
-      padding: 6px 0;
+      padding: 7px 0;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
 
@@ -367,11 +494,65 @@
       border-bottom: none;
     }
 
+    /* User Portfolio Panel */
+    .portfolio-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .portfolio-stat {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .portfolio-stat-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .portfolio-stat-val {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Notification Alert Box */
+    .action-notice {
+      display: none;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 12px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .notice-success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #ffffff;
+    }
+
+    .notice-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #ffffff;
+    }
+
     /* Audit Log */
     .event-list {
       display: flex;
       flex-direction: column;
       gap: 10px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 4px;
     }
 
     .event-item {
@@ -382,12 +563,97 @@
       font-size: 13px;
     }
 
+    .event-item.evt-deposit {
+      border-left-color: var(--green);
+    }
+
+    .event-item.evt-withdraw {
+      border-left-color: var(--red);
+    }
+
     .event-header {
       display: flex;
       justify-content: space-between;
       color: var(--text-muted);
       font-size: 11px;
       margin-bottom: 4px;
+    }
+
+    /* Wallet Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: #0b1329;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 440px;
+      padding: 24px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75);
+      position: relative;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .wallet-option {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+      width: 100%;
+      text-align: left;
+    }
+
+    .wallet-option:hover {
+      background: rgba(56, 189, 248, 0.1);
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+    }
+
+    .wallet-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
@@ -402,9 +668,13 @@
           <div class="brand-subtitle">Autonomous CLMM & Delta-Neutral Liquidity Vaults</div>
         </div>
       </div>
-      <div class="badges">
+      <div class="header-actions">
         <div class="badge badge-network">● Sui Mainnet</div>
         <div class="badge badge-sim">⚙️ DRY_RUN Simulation</div>
+        <!-- Wallet Connect / Status Button -->
+        <button id="walletBtn" class="wallet-btn" onclick="openWalletModal()">
+          <span>👛 Connect Sui Wallet</span>
+        </button>
       </div>
     </header>
 
@@ -412,18 +682,18 @@
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Total Vault TVL <span style="color: var(--green);">● Active</span></div>
-        <div class="stat-value" id="valTvl">$19,999.90</div>
+        <div class="stat-value" id="valTvl">$20,000.00</div>
         <div class="stat-sub">SUI / Circle USDC Pair</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Net Investor APY <span style="background: rgba(0, 242, 254, 0.12); color: var(--cyan); padding: 2px 6px; border-radius: 4px; font-size: 10px;">⚡ Dynamic Trailing</span></div>
-        <div class="stat-value" style="color: var(--cyan);" id="valNetApy">109.4%</div>
-        <div class="stat-sub" id="valApySub">105% Fees + 16.4% Funding - 10% Fee</div>
+        <div class="stat-value" style="color: var(--cyan);" id="valNetApy">107.6%</div>
+        <div class="stat-sub" id="valApySub">104.2% Fees + 10.0% Funding - 10% Fee</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">VaultShare Price <span>On-Chain</span></div>
         <div class="stat-value" id="valSharePrice">$1.0000</div>
-        <div class="stat-sub">20,000 Shares Minted</div>
+        <div class="stat-sub" id="valTotalShares">20,000 Shares Outstanding</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Vault 24h Yield <span style="background: rgba(16, 185, 129, 0.12); color: var(--green); padding: 2px 6px; border-radius: 4px; font-size: 10px;">Gross</span></div>
@@ -447,17 +717,17 @@
 
           <div class="range-box">
             <div class="range-prices">
-              <span>Lower Bound: <strong id="valLowerPrice">$1.8041</strong></span>
-              <span>Spot SUI: <strong id="valSpotPrice" style="color: #ffffff; font-size: 15px;">$2.0500</strong></span>
-              <span>Upper Bound: <strong id="valUpperPrice">$2.2124</strong></span>
+              <span>Lower Bound: <strong id="valLowerPrice">$0.8026</strong></span>
+              <span>Spot SUI: <strong id="valSpotPrice" style="color: #ffffff; font-size: 15px;">$0.8950</strong></span>
+              <span>Upper Bound: <strong id="valUpperPrice">$0.9845</strong></span>
             </div>
             <div class="progress-track">
-              <div class="progress-fill" id="rangeFill" style="width: 60.2%;"></div>
-              <div class="progress-marker" id="rangeMarker" style="left: 60.2%;"></div>
+              <div class="progress-fill" id="rangeFill" style="width: 50.8%;"></div>
+              <div class="progress-marker" id="rangeMarker" style="left: 50.8%;"></div>
             </div>
             <div class="range-info">
-              <span style="color: var(--text-muted);">Current Band Position: <strong id="valProgressPct">60.2%</strong></span>
-              <span style="color: var(--text-muted);">Nearest Boundary Distance: <strong id="valBoundaryDist">39.8%</strong></span>
+              <span style="color: var(--text-muted);">Current Band Position: <strong id="valProgressPct">50.8%</strong></span>
+              <span style="color: var(--text-muted);">Nearest Boundary Distance: <strong id="valBoundaryDist">49.2%</strong></span>
             </div>
           </div>
 
@@ -467,14 +737,14 @@
           </div>
 
           <!-- Dynamic 24h CLMM Market Depth & Concentration Multiplier -->
-          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; font-size: 12px;">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; padding: 12px 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; font-size: 12px;">
             <div>
               <span style="color: var(--text-muted); display: block;">Turbos 24h Vol:</span>
-              <strong id="valPoolVol" style="color: var(--cyan);">$4.52M</strong>
+              <strong id="valPoolVol" style="color: var(--cyan);">$4.67M</strong>
             </div>
             <div>
               <span style="color: var(--text-muted); display: block;">Active Pool TVL:</span>
-              <strong id="valPoolLiq">$845K</strong>
+              <strong id="valPoolLiq">$834K</strong>
             </div>
             <div>
               <span style="color: var(--text-muted); display: block;">Concentration Band:</span>
@@ -482,7 +752,7 @@
             </div>
             <div>
               <span style="color: var(--text-muted); display: block;">Fee Multiplier:</span>
-              <strong id="valConcentration" style="color: var(--cyan);">10.5x Boost</strong>
+              <strong id="valConcentration" style="color: var(--cyan);">10.0x Boost</strong>
             </div>
           </div>
 
@@ -512,21 +782,21 @@
             <div class="hedge-tile">
               <div class="hedge-tile-title">Spot SUI Delta (&Delta;<sub>spot</sub>)</div>
               <div class="hedge-tile-val" id="valSpotDelta" style="color: var(--blue);">+371.65 SUI</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valSpotDeltaUsd">$761.88 USD</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valSpotDeltaUsd">$332.63 USD</div>
             </div>
             <div class="hedge-tile">
               <div class="hedge-tile-title">Bluefin Short Size (1x Short)</div>
               <div class="hedge-tile-val" id="valPerpShort" style="color: var(--cyan);">-371.73 SUI</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valPerpShortUsd">$762.04 USD</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valPerpShortUsd">$332.70 USD</div>
             </div>
             <div class="hedge-tile">
               <div class="hedge-tile-title">Net Portfolio Delta (&Delta;<sub>net</sub>)</div>
               <div class="hedge-tile-val" id="valNetDelta" style="color: var(--green);">-0.08 SUI</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valNetDeltaUsd">$-0.17 USD (&Delta; drift: 0.02%)</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valNetDeltaUsd">$-0.07 USD (&Delta; drift: 0.02%)</div>
             </div>
             <div class="hedge-tile">
               <div class="hedge-tile-title">8h Perp Funding Yield</div>
-              <div class="hedge-tile-val" id="valFundingRate" style="color: var(--green);">+16.4% APR</div>
+              <div class="hedge-tile-val" id="valFundingRate" style="color: var(--green);">+10.0% APR</div>
               <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Earned by Shorts from Longs</div>
             </div>
           </div>
@@ -548,6 +818,7 @@
           <p style="font-size: 13px; color: var(--text-muted);">
             Trigger simulated price shocks to observe atomic PTB rebalancing and Bluefin dynamic re-hedging live:
           </p>
+
           <div class="controls">
             <button class="btn btn-outline" onclick="triggerSimulation('normal')">
               🟢 Live Spot Market (<span id="btnSpot">$0.8950</span>)
@@ -562,79 +833,276 @@
         </div>
       </div>
 
-      <!-- Right Column: Deposit Calculator & Events -->
+      <!-- Right Column: User Portfolio, Vault Actions & Audit Feed -->
       <div>
-        <!-- Deposit Calculator -->
-        <div class="panel">
+        <!-- My Vault Portfolio Panel -->
+        <div class="panel" id="portfolioPanel">
           <div class="panel-header">
-            <div class="panel-title">💰 Deposit Calculator</div>
-          </div>
-          <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
-            Deposit Amount (USDC):
-          </label>
-          <input type="number" class="calc-input" id="calcInput" value="5000" min="100" step="100" oninput="calculateDeposit()">
-
-          <div class="calc-results">
-            <div class="calc-row">
-              <span style="color: var(--text-muted);">VaultShares Received:</span>
-              <strong id="calcShares">5,000.00 Shares</strong>
-            </div>
-            <div class="calc-row">
-              <span style="color: var(--text-muted);">Net Investor APY:</span>
-              <strong style="color: var(--cyan);" id="calcApyDisplay">109.4%</strong>
-            </div>
-            <div class="calc-row">
-              <span style="color: var(--text-muted);">Projected Monthly Cash Flow:</span>
-              <strong style="color: var(--green);" id="calcMonthly">$455.83 / mo</strong>
-            </div>
-            <div class="calc-row">
-              <span style="color: var(--text-muted);">Projected Annual Yield:</span>
-              <strong style="color: var(--green);" id="calcAnnual">$5,470.00 / yr</strong>
+            <div class="panel-title">💼 My Vault Portfolio</div>
+            <div id="portfolioBadge" class="badge" style="background: rgba(56, 189, 248, 0.15); color: var(--cyan);">
+              Not Connected
             </div>
           </div>
 
-          <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="simulateDepositAction()">
-            ⚡ Simulate Deposit (Mint VaultShare)
-          </button>
+          <!-- Unconnected View -->
+          <div id="portfolioUnconnected" style="text-align: center; padding: 18px 10px;">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+              Connect your Sui wallet or launch the 1-Click Demo Investor Wallet to view your personal VaultShares, valuation, and accrued yield.
+            </p>
+            <button class="btn btn-primary" onclick="connectDemoWallet()">
+              ⚡ Connect Demo Investor Wallet
+            </button>
+          </div>
+
+          <!-- Connected View -->
+          <div id="portfolioConnected" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 12px;">
+              <span style="color: var(--text-muted);">Active Wallet:</span>
+              <span id="portAddress" style="font-family: 'JetBrains Mono', monospace; color: var(--cyan); font-weight: 600;">0x7f4a...92b1</span>
+            </div>
+
+            <div class="portfolio-grid">
+              <div class="portfolio-stat">
+                <div class="portfolio-stat-title">Current Valuation</div>
+                <div class="portfolio-stat-val" id="portValuation" style="color: #ffffff;">$5,035.70</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">USD Value</div>
+              </div>
+              <div class="portfolio-stat">
+                <div class="portfolio-stat-title">VaultShares Owned</div>
+                <div class="portfolio-stat-val" id="portShares" style="color: var(--cyan);">5,000.00</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="portPoolShare">25.0% of Vault</div>
+              </div>
+              <div class="portfolio-stat">
+                <div class="portfolio-stat-title">Invested Capital</div>
+                <div class="portfolio-stat-val" id="portInitial" style="color: var(--text-muted);">$5,000.00</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Principal USDC</div>
+              </div>
+              <div class="portfolio-stat">
+                <div class="portfolio-stat-title">Accrued Yield</div>
+                <div class="portfolio-stat-val" id="portYield" style="color: var(--green);">+$35.70</div>
+                <div style="font-size: 11px; color: var(--green); margin-top: 2px;">Compounded in NAV</div>
+              </div>
+            </div>
+
+            <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 10px 12px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+              <span>🌾 Auto-Compounding Mode:</span>
+              <strong style="color: var(--green);">90% to NAV · 10% Treasury Fee</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Vault Actions Panel (Deposit, Withdraw, Compounding) -->
+        <div class="panel">
+          <!-- Action feedback banner -->
+          <div id="actionNotice" class="action-notice"></div>
+
+          <!-- Tabs Navigation -->
+          <div class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('deposit')">
+              📥 Deposit
+            </button>
+            <button class="tab-btn" onclick="switchTab('withdraw')">
+              📤 Withdraw
+            </button>
+            <button class="tab-btn" onclick="switchTab('compound')">
+              🌾 Compounding
+            </button>
+          </div>
+
+          <!-- Tab 1: Deposit -->
+          <div id="tab-deposit" class="tab-pane active">
+            <div class="form-group">
+              <label class="form-label">
+                <span>Deposit Amount (USDC)</span>
+                <span style="color: var(--cyan); font-size: 11px;">Available: $10,000 USDC</span>
+              </label>
+              <input type="number" class="calc-input" id="depositInput" value="1000" min="10" step="100" oninput="updateDepositPreview()">
+              
+              <div class="chip-group">
+                <button class="chip-btn" onclick="setDepositAmount(500)">+$500</button>
+                <button class="chip-btn" onclick="setDepositAmount(1000)">+$1,000</button>
+                <button class="chip-btn" onclick="setDepositAmount(2500)">+$2,500</button>
+                <button class="chip-btn" onclick="setDepositAmount(5000)">+$5,000</button>
+                <button class="chip-btn" onclick="setDepositAmount(10000)">MAX</button>
+              </div>
+            </div>
+
+            <div class="calc-results">
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">VaultShares to Mint:</span>
+                <strong id="previewDepositShares" style="color: var(--cyan);">1,000.00 Shares</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Current Share Price:</span>
+                <strong id="previewSharePrice">$1.0000</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Net Investor APY:</span>
+                <strong style="color: var(--cyan);" id="previewDepositApy">107.6%</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Est. Monthly Cash Flow:</span>
+                <strong style="color: var(--green);" id="previewMonthly">$89.67 / mo</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Est. Annual Yield:</span>
+                <strong style="color: var(--green);" id="previewAnnual">$1,076.00 / yr</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Capital Deployment:</span>
+                <span style="font-size: 11px; color: var(--text-muted);">50% LP Pool + 50% Bluefin Hedge</span>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="executeDepositAction()">
+              ⚡ Deposit USDC & Mint VaultShares
+            </button>
+          </div>
+
+          <!-- Tab 2: Withdraw -->
+          <div id="tab-withdraw" class="tab-pane">
+            <div class="form-group">
+              <label class="form-label">
+                <span>Shares to Burn & Redeem</span>
+                <span id="withdrawAvailLabel" style="color: var(--cyan); font-size: 11px;">Available: 5,000.00 Shares</span>
+              </label>
+              <input type="number" class="calc-input" id="withdrawInput" value="1000" min="1" step="100" oninput="updateWithdrawPreview()">
+              
+              <div class="chip-group">
+                <button class="chip-btn" onclick="setWithdrawPct(25)">25%</button>
+                <button class="chip-btn" onclick="setWithdrawPct(50)">50%</button>
+                <button class="chip-btn" onclick="setWithdrawPct(75)">75%</button>
+                <button class="chip-btn" onclick="setWithdrawPct(100)">MAX (100%)</button>
+              </div>
+            </div>
+
+            <div class="calc-results">
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Total Redemption Value:</span>
+                <strong id="previewWithdrawUsd" style="color: #ffffff;">$1,000.00 USD</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Redemption Split (50/50):</span>
+                <span id="previewWithdrawSplit" style="color: var(--green); font-size: 12px; font-weight: 600;">$500.00 USDC + 558.65 SUI</span>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Exit Fee:</span>
+                <strong style="color: var(--green);">0.00% (Zero Fee)</strong>
+              </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Remaining VaultShares:</span>
+                <strong id="previewRemainingShares" style="color: var(--text-muted);">4,000.00 Shares</strong>
+              </div>
+            </div>
+
+            <button class="btn btn-danger" style="width: 100%; justify-content: center;" onclick="executeWithdrawAction()">
+              🔥 Redeem & Burn VaultShares
+            </button>
+          </div>
+
+          <!-- Tab 3: Compounding & Mechanics -->
+          <div id="tab-compound" class="tab-pane">
+            <div style="font-size: 13px; line-height: 1.6; color: var(--text-muted);">
+              <p style="margin-bottom: 12px;">
+                <strong style="color: #ffffff;">How Yield Compounding Works:</strong>
+                When the automated keeper bot calls <code style="color: var(--cyan); background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px;">harvest_and_compound()</code> on the Sui Move smart contract:
+              </p>
+              <div style="background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255, 255, 255, 0.04);">
+                <div style="margin-bottom: 6px; color: #ffffff;">
+                  🏛️ <strong style="color: var(--yellow);">10% Performance Fee:</strong> Sent to the protocol fee treasury.
+                </div>
+                <div style="color: #ffffff;">
+                  🌾 <strong style="color: var(--green);">90% Compounded into NAV:</strong> Reinvested directly into the vault liquidity reserves.
+                </div>
+              </div>
+              <p style="margin-bottom: 10px;">
+                Because no new shares are minted during harvest, the <strong style="color: var(--cyan);">VaultShare Price</strong> increases monotonically over time:
+              </p>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px; color: var(--cyan); margin-bottom: 12px;">
+                Share Price = Total Net Asset Value / Total Shares
+              </div>
+              <p style="font-size: 12px;">
+                Investors don't need to manually claim yield or incur gas fees; simply holding the VaultShare automatically captures compounding returns.
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Recent Events Feed -->
         <div class="panel">
           <div class="panel-header">
             <div class="panel-title">📜 On-Chain Vault Audit Feed</div>
+            <span style="font-size: 11px; color: var(--text-muted);">Live Move Events</span>
           </div>
           <div class="event-list" id="eventList">
-            <div class="event-item">
-              <div class="event-header">
-                <span>COMPOUND</span>
-                <span>12 hrs ago</span>
-              </div>
-              <div>Harvested <strong>$71.40</strong> -> Treasury Fee: $7.14 | Auto-Compounded: $64.26</div>
-            </div>
-            <div class="event-item">
-              <div class="event-header">
-                <span>REBALANCE</span>
-                <span>4 hrs ago</span>
-              </div>
-              <div>Atomic PTB recentered range: $1.80 - $2.21 -> $1.84 - $2.26 (Gas: $0.008)</div>
-            </div>
-            <div class="event-item">
-              <div class="event-header">
-                <span>DEPOSIT</span>
-                <span>1 day ago</span>
-              </div>
-              <div>0x9482...49e1 deposited $5,000.00 -> Minted 5,000 VaultShare</div>
-            </div>
+            <!-- Dynamically populated from backend -->
           </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Wallet Connection Modal -->
+  <div class="modal-overlay" id="walletModal" onclick="closeWalletModalOnBackdrop(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 17px; font-weight: 700;">Connect Sui Wallet</h3>
+        <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+        Select your preferred Sui wallet to interact with BluSky delta-neutral vaults:
+      </p>
+
+      <!-- 1-Click Demo Investor Option -->
+      <button class="wallet-option" onclick="connectDemoWallet()">
+        <div class="wallet-icon" style="background: rgba(56, 189, 248, 0.2); color: var(--cyan);">⚡</div>
+        <div>
+          <div style="font-weight: 700; font-size: 14px; color: #ffffff;">1-Click Demo Investor Wallet</div>
+          <div style="font-size: 12px; color: var(--cyan);">Pre-funded with $5,000 / 5,000 Shares</div>
+        </div>
+      </button>
+
+      <!-- Sui Wallet Standard Option -->
+      <button class="wallet-option" onclick="connectBrowserWallet()">
+        <div class="wallet-icon" style="background: rgba(34, 197, 94, 0.2); color: var(--green);">💧</div>
+        <div>
+          <div style="font-weight: 700; font-size: 14px; color: #ffffff;">Sui Wallet / Browser Standard</div>
+          <div style="font-size: 12px; color: var(--text-muted);">Sui Wallet, Suiet, Nightly, Martian</div>
+        </div>
+      </button>
+
+      <!-- Custom Address Input -->
+      <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+          Or Connect with Custom Sui Address:
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="customAddressInput" placeholder="0x..." style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 12px; font-family: 'JetBrains Mono', monospace; outline: none;">
+          <button class="btn btn-outline" style="padding: 8px 14px; font-size: 12px;" onclick="connectCustomAddress()">Connect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // State
+    let currentWallet = null; // { address: '0x...', label: '...' }
+    let currentNetApyRate = 1.076;
+    let currentSharePrice = 1.0000;
+    let currentSpotPrice = 0.8950;
+    let userShares = 0;
+
+    // Load saved wallet if any
+    const savedAddr = localStorage.getItem('blusky_wallet_address');
+    if (savedAddr) {
+      currentWallet = { address: savedAddr };
+    }
+
     async function fetchStatus() {
       try {
-        const res = await fetch('/api/status');
+        const url = currentWallet?.address ? `/api/status?address=${encodeURIComponent(currentWallet.address)}` : '/api/status';
+        const res = await fetch(url);
         const data = await res.json();
         updateUI(data);
       } catch (err) {
@@ -642,13 +1110,21 @@
       }
     }
 
-    let currentNetApyRate = 1.094;
-
     function updateUI(data) {
+      currentSpotPrice = data.currentPrice || 0.895;
+      currentSharePrice = data.vault.sharePriceUsd || 1.0;
+      
+      if (data.vault?.apy?.netInvestorApy) {
+        currentNetApyRate = parseFloat(data.vault.apy.netInvestorApy) / 100;
+      }
+
       // Top Metrics
-      document.getElementById('valTvl').textContent = '$' + data.vault.tvlUsd.toLocaleString();
+      document.getElementById('valTvl').textContent = '$' + data.vault.tvlUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       document.getElementById('valNetApy').textContent = data.vault.apy.netInvestorApy;
-      document.getElementById('valSharePrice').textContent = '$' + data.vault.sharePriceUsd.toFixed(4);
+      document.getElementById('valSharePrice').textContent = '$' + currentSharePrice.toFixed(4);
+      if (document.getElementById('valTotalShares')) {
+        document.getElementById('valTotalShares').textContent = `${data.vault.totalShares.toLocaleString()} Shares Outstanding`;
+      }
       if (document.getElementById('valGrossYield')) {
         document.getElementById('valGrossYield').textContent = '$' + data.vault.economics.dailyGrossYieldUsd.toFixed(2);
       }
@@ -658,20 +1134,16 @@
       if (document.getElementById('valApySub')) {
         document.getElementById('valApySub').textContent = `${data.vault.apy.grossTradingApr} Fees + ${data.vault.apy.bluefinFundingApr} Funding - 10% Fee`;
       }
-      if (document.getElementById('calcApyDisplay')) {
-        document.getElementById('calcApyDisplay').textContent = data.vault.apy.netInvestorApy;
-      }
+
+      // Turbos CLMM Depth
       if (data.clmm.volume24hUsd && document.getElementById('valPoolVol')) {
         document.getElementById('valPoolVol').textContent = '$' + (data.clmm.volume24hUsd / 1000000).toFixed(2) + 'M';
         document.getElementById('valPoolLiq').textContent = '$' + Math.round(data.clmm.poolLiquidityUsd / 1000) + 'K';
-        document.getElementById('valConcentration').textContent = (data.clmm.concentrationMultiplier || 10.5) + 'x Multiplier';
+        document.getElementById('valConcentration').textContent = (data.clmm.concentrationMultiplier || 10.0) + 'x Multiplier';
       }
-      if (data.vault?.apy?.netInvestorApy) {
-        currentNetApyRate = parseFloat(data.vault.apy.netInvestorApy) / 100;
-        calculateDeposit();
-      }
+
       if (document.getElementById('btnSpot')) {
-        document.getElementById('btnSpot').textContent = '$' + data.currentPrice.toFixed(4);
+        document.getElementById('btnSpot').textContent = '$' + currentSpotPrice.toFixed(4);
       }
       if (data.clmm.targetNewBand && document.getElementById('newBandText')) {
         document.getElementById('newBandText').textContent = '$' + data.clmm.targetNewBand.lower.toFixed(4) + ' <──> $' + data.clmm.targetNewBand.upper.toFixed(4);
@@ -730,6 +1202,317 @@
         hedgeBadge.textContent = '✅ STRICTLY DELTA-NEUTRAL';
         hedgeNotice.style.display = 'none';
       }
+
+      // User Position & Portfolio UI
+      updatePortfolioUI(data.userPosition);
+
+      // Audit Events Feed
+      if (data.vault.recentEvents) {
+        renderEventFeed(data.vault.recentEvents);
+      }
+
+      // Update Tab Previews
+      updateDepositPreview();
+      updateWithdrawPreview();
+    }
+
+    function updatePortfolioUI(pos) {
+      const walletBtn = document.getElementById('walletBtn');
+      const pUnconnected = document.getElementById('portfolioUnconnected');
+      const pConnected = document.getElementById('portfolioConnected');
+      const pBadge = document.getElementById('portfolioBadge');
+
+      if (!currentWallet) {
+        walletBtn.className = 'wallet-btn';
+        walletBtn.innerHTML = '<span>👛 Connect Sui Wallet</span>';
+        pUnconnected.style.display = 'block';
+        pConnected.style.display = 'none';
+        pBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+        pBadge.style.color = 'var(--text-muted)';
+        pBadge.textContent = 'Not Connected';
+        userShares = 0;
+        document.getElementById('withdrawAvailLabel').textContent = 'Available: 0.00 Shares';
+        return;
+      }
+
+      const shortAddr = `${currentWallet.address.slice(0, 6)}...${currentWallet.address.slice(-4)}`;
+      walletBtn.className = 'wallet-btn wallet-btn-connected';
+      walletBtn.innerHTML = `<span>🟢 ${shortAddr}</span> <span style="font-size: 11px; opacity: 0.7; margin-left: 4px;" onclick="event.stopPropagation(); disconnectWallet();">[✕]</span>`;
+
+      pUnconnected.style.display = 'none';
+      pConnected.style.display = 'block';
+      pBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+      pBadge.style.color = 'var(--green)';
+      pBadge.textContent = '● Position Active';
+
+      document.getElementById('portAddress').textContent = shortAddr;
+
+      if (pos && pos.hasPosition) {
+        userShares = pos.shares;
+        document.getElementById('portValuation').textContent = '$' + pos.currentValuationUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('portShares').textContent = pos.shares.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('portPoolShare').textContent = `${pos.shareOfPoolPct.toFixed(1)}% of Vault`;
+        document.getElementById('portInitial').textContent = '$' + pos.initialDepositUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('portYield').textContent = '+$' + pos.accruedYieldUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      } else {
+        userShares = 0;
+        document.getElementById('portValuation').textContent = '$0.00';
+        document.getElementById('portShares').textContent = '0.00';
+        document.getElementById('portPoolShare').textContent = '0.0% of Vault';
+        document.getElementById('portInitial').textContent = '$0.00';
+        document.getElementById('portYield').textContent = '+$0.00';
+      }
+
+      document.getElementById('withdrawAvailLabel').textContent = `Available: ${userShares.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Shares`;
+    }
+
+    function renderEventFeed(events) {
+      const container = document.getElementById('eventList');
+      container.innerHTML = '';
+      events.slice(0, 6).forEach(evt => {
+        const item = document.createElement('div');
+        let typeClass = 'event-item';
+        if (evt.type === 'DEPOSIT') typeClass += ' evt-deposit';
+        if (evt.type === 'WITHDRAW') typeClass += ' evt-withdraw';
+        item.className = typeClass;
+
+        let timeStr = 'Just now';
+        if (evt.timestamp) {
+          const diffMs = Date.now() - new Date(evt.timestamp).getTime();
+          const mins = Math.floor(diffMs / 60000);
+          if (mins > 60) {
+            timeStr = `${Math.floor(mins / 60)} hrs ago`;
+          } else if (mins > 0) {
+            timeStr = `${mins} min ago`;
+          }
+        }
+
+        let bodyHtml = '';
+        if (evt.type === 'DEPOSIT') {
+          bodyHtml = `${evt.user || 'Investor'} deposited <strong>$${(evt.amountUsd || 0).toLocaleString()} USDC</strong> -> Minted ${(evt.sharesMinted || 0).toLocaleString()} VaultShare`;
+        } else if (evt.type === 'WITHDRAW') {
+          bodyHtml = `${evt.user || 'Investor'} redeemed <strong>${(evt.sharesBurned || 0).toLocaleString()} VaultShare</strong> -> Received $${(evt.amountUsd || 0).toLocaleString()} USD`;
+        } else if (evt.type === 'COMPOUND') {
+          bodyHtml = `Harvested <strong>$${(evt.grossFeesUsd || 0).toFixed(2)}</strong> -> Treasury: $${(evt.performanceFeeCollectedUsd || 0).toFixed(2)} | Auto-Compounded: $${(evt.compoundedUsd || 0).toFixed(2)}`;
+        } else if (evt.type === 'REBALANCE') {
+          bodyHtml = `Atomic PTB recentered band: ${evt.oldRange} -> ${evt.newRange}`;
+        }
+
+        item.innerHTML = `
+          <div class="event-header">
+            <span style="font-weight: 700;">${evt.type}</span>
+            <span>${timeStr}</span>
+          </div>
+          <div>${bodyHtml}</div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    // Tab Navigation
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+      if (tabId === 'deposit') {
+        document.querySelectorAll('.tab-btn')[0].classList.add('active');
+        document.getElementById('tab-deposit').classList.add('active');
+        updateDepositPreview();
+      } else if (tabId === 'withdraw') {
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        document.getElementById('tab-withdraw').classList.add('active');
+        updateWithdrawPreview();
+      } else if (tabId === 'compound') {
+        document.querySelectorAll('.tab-btn')[2].classList.add('active');
+        document.getElementById('tab-compound').classList.add('active');
+      }
+    }
+
+    // Deposit Logic
+    function setDepositAmount(amt) {
+      document.getElementById('depositInput').value = amt;
+      updateDepositPreview();
+    }
+
+    function updateDepositPreview() {
+      const amount = parseFloat(document.getElementById('depositInput').value || 0);
+      const sharePrice = currentSharePrice || 1.0;
+      const sharesToReceive = amount / sharePrice;
+      const apy = currentNetApyRate;
+      const annual = amount * apy;
+      const monthly = annual / 12;
+
+      document.getElementById('previewDepositShares').textContent = sharesToReceive.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Shares';
+      document.getElementById('previewSharePrice').textContent = '$' + sharePrice.toFixed(4);
+      document.getElementById('previewDepositApy').textContent = (apy * 100).toFixed(1) + '%';
+      document.getElementById('previewMonthly').textContent = '$' + monthly.toFixed(2) + ' / mo';
+      document.getElementById('previewAnnual').textContent = '$' + annual.toFixed(2) + ' / yr';
+    }
+
+    async function executeDepositAction() {
+      if (!currentWallet) {
+        openWalletModal();
+        return;
+      }
+      const amount = parseFloat(document.getElementById('depositInput').value || 0);
+      if (amount <= 0) {
+        showNotice('error', 'Please enter a valid deposit amount greater than 0.');
+        return;
+      }
+
+      showNotice('success', 'Constructing Move PTB and minting VaultShares on Sui...');
+
+      try {
+        const res = await fetch('/api/vault/deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: currentWallet.address,
+            amountUsdc: amount
+          })
+        });
+        const json = await res.json();
+        if (json.success) {
+          showNotice('success', `🎉 Deposit Successful! Minted ${json.result.sharesMinted.toLocaleString()} VaultShares. Tx Digest: ${json.result.txDigest.slice(0, 14)}...`);
+          fetchStatus();
+        } else {
+          showNotice('error', json.error || 'Failed to execute deposit.');
+        }
+      } catch (err) {
+        showNotice('error', 'Network error during deposit: ' + err.message);
+      }
+    }
+
+    // Withdraw Logic
+    function setWithdrawPct(pct) {
+      const sharesToBurn = (userShares * pct) / 100;
+      document.getElementById('withdrawInput').value = Math.round(sharesToBurn * 100) / 100;
+      updateWithdrawPreview();
+    }
+
+    function updateWithdrawPreview() {
+      const shares = parseFloat(document.getElementById('withdrawInput').value || 0);
+      const sharePrice = currentSharePrice || 1.0;
+      const totalUsd = shares * sharePrice;
+      const usdcPart = totalUsd / 2;
+      const suiPart = usdcPart / Math.max(currentSpotPrice, 0.01);
+      const remaining = Math.max(0, userShares - shares);
+
+      document.getElementById('previewWithdrawUsd').textContent = '$' + totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD';
+      document.getElementById('previewWithdrawSplit').textContent = `$${usdcPart.toFixed(2)} USDC + ${suiPart.toFixed(2)} SUI`;
+      document.getElementById('previewRemainingShares').textContent = remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Shares';
+    }
+
+    async function executeWithdrawAction() {
+      if (!currentWallet) {
+        openWalletModal();
+        return;
+      }
+      const shares = parseFloat(document.getElementById('withdrawInput').value || 0);
+      if (shares <= 0) {
+        showNotice('error', 'Please enter a valid number of shares to redeem.');
+        return;
+      }
+      if (shares > userShares + 0.01) {
+        showNotice('error', `Insufficient shares. You have ${userShares.toFixed(2)} shares available.`);
+        return;
+      }
+
+      showNotice('success', 'Burning VaultShares and redeeming pro-rata USDC + SUI...');
+
+      try {
+        const res = await fetch('/api/vault/withdraw', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userAddress: currentWallet.address,
+            shares: shares
+          })
+        });
+        const json = await res.json();
+        if (json.success) {
+          showNotice('success', `🎉 Redemption Successful! Redeemed $${json.result.withdrawnUsd.toFixed(2)} USD ($${json.result.returnedUsdc.toFixed(2)} USDC + ${json.result.returnedSui.toFixed(2)} SUI). Tx Digest: ${json.result.txDigest.slice(0, 14)}...`);
+          fetchStatus();
+        } else {
+          showNotice('error', json.error || 'Failed to execute withdrawal.');
+        }
+      } catch (err) {
+        showNotice('error', 'Network error during withdrawal: ' + err.message);
+      }
+    }
+
+    function showNotice(type, msg) {
+      const notice = document.getElementById('actionNotice');
+      notice.className = `action-notice notice-${type}`;
+      notice.textContent = msg;
+      notice.style.display = 'block';
+      setTimeout(() => {
+        notice.style.display = 'none';
+      }, 7000);
+    }
+
+    // Wallet Management
+    function openWalletModal() {
+      document.getElementById('walletModal').style.display = 'flex';
+    }
+
+    function closeWalletModal() {
+      document.getElementById('walletModal').style.display = 'none';
+    }
+
+    function closeWalletModalOnBackdrop(e) {
+      if (e.target.id === 'walletModal') {
+        closeWalletModal();
+      }
+    }
+
+    function connectDemoWallet() {
+      const demoAddress = '0x7f4a29c18b6e4d51a92e34018dfcb41928df92b1';
+      currentWallet = { address: demoAddress, isDemo: true };
+      localStorage.setItem('blusky_wallet_address', demoAddress);
+      closeWalletModal();
+      showNotice('success', 'Connected to 1-Click Demo Investor Wallet (0x7f4a...92b1)');
+      fetchStatus();
+    }
+
+    async function connectBrowserWallet() {
+      if (window.suiWallet || window.sui || window.nightly?.sui) {
+        try {
+          const provider = window.suiWallet || window.sui || window.nightly?.sui;
+          const accounts = await (provider.requestPermissions ? provider.requestPermissions() : provider.getAccounts());
+          if (accounts && accounts[0]) {
+            currentWallet = { address: accounts[0] };
+            localStorage.setItem('blusky_wallet_address', accounts[0]);
+            closeWalletModal();
+            showNotice('success', `Connected to browser wallet: ${accounts[0].slice(0, 6)}...`);
+            fetchStatus();
+            return;
+          }
+        } catch (err) {
+          console.warn('Browser wallet connection failed:', err);
+        }
+      }
+      alert('No Sui Wallet browser extension detected.\n\nTip: You can use the "1-Click Demo Investor Wallet" to test deposits, withdrawals, and yield instantly!');
+    }
+
+    function connectCustomAddress() {
+      const input = document.getElementById('customAddressInput').value.trim();
+      if (!input || !input.startsWith('0x') || input.length < 10) {
+        alert('Please enter a valid Sui address (starting with 0x).');
+        return;
+      }
+      currentWallet = { address: input };
+      localStorage.setItem('blusky_wallet_address', input);
+      closeWalletModal();
+      showNotice('success', `Connected to ${input.slice(0, 6)}...`);
+      fetchStatus();
+    }
+
+    function disconnectWallet() {
+      currentWallet = null;
+      localStorage.removeItem('blusky_wallet_address');
+      showNotice('success', 'Wallet disconnected.');
+      fetchStatus();
     }
 
     async function triggerSimulation(scenario) {
@@ -737,7 +1520,7 @@
         const res = await fetch('/api/simulate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scenario })
+          body: JSON.stringify({ scenario, address: currentWallet?.address })
         });
         const json = await res.json();
         updateUI(json.state);
@@ -746,39 +1529,9 @@
       }
     }
 
-    function calculateDeposit() {
-      const amount = parseFloat(document.getElementById('calcInput').value || 0);
-      const apy = currentNetApyRate;
-      const annual = amount * apy;
-      const monthly = annual / 12;
-
-      document.getElementById('calcShares').textContent = amount.toLocaleString() + '.00 Shares';
-      document.getElementById('calcMonthly').textContent = '$' + monthly.toFixed(2) + ' / mo';
-      document.getElementById('calcAnnual').textContent = '$' + annual.toFixed(2) + ' / yr';
-    }
-
-    function simulateDepositAction() {
-      const amount = document.getElementById('calcInput').value;
-      const eventList = document.getElementById('eventList');
-      const newEvt = document.createElement('div');
-      newEvt.className = 'event-item';
-      newEvt.innerHTML = `
-        <div class="event-header">
-          <span>DEPOSIT</span>
-          <span>Just now</span>
-        </div>
-        <div>0xYou deposited <strong>$${parseFloat(amount).toLocaleString()} USDC</strong> -> Minted ${parseFloat(amount).toLocaleString()} VaultShare</div>
-      `;
-      eventList.insertBefore(newEvt, eventList.firstChild);
-      alert(`🎉 Deposit Simulated!\nMinted ${parseFloat(amount).toLocaleString()} VaultShare<SUI, USDC> tokens to your address.`);
-    }
-
-    // Initial load
+    // Initial load & recurring status sync
     fetchStatus();
-    calculateDeposit();
-    // Refresh every 10 seconds
     setInterval(fetchStatus, 10000);
   </script>
 </body>
 </html>
-
