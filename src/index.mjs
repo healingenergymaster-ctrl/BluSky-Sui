@@ -135,9 +135,11 @@ async function displayVaultDashboard() {
   console.log(`    • Total Shares Minted:      ${summary.totalShares.toLocaleString()} shares`);
   console.log('─'.repeat(78));
 
-  console.log(' 💎 YIELD & PROTOCOL MONETIZATION');
-  console.log(`    • Gross Pool APR:           ${summary.apy.grossTradingApr}`);
-  console.log(`    • Bluefin Perp Funding:     ${summary.apy.bluefinFundingApr}`);
+  console.log(' 💎 YIELD & PROTOCOL MONETIZATION (Dynamic 24h Trailing)');
+  console.log(`    • Turbos 24h Volume:        $${(summary.apy.volume24hUsd / 1000000).toFixed(2)}M USD (${summary.apy.volumeSource || 'DexScreener'})`);
+  console.log(`    • CLMM Band Concentration:  ${summary.apy.concentrationMultiplier}x Efficiency Multiplier (±10% Active Band)`);
+  console.log(`    • Gross Dynamic Fee APR:    ${summary.apy.grossTradingApr}`);
+  console.log(`    • Bluefin Perp Funding:     ${summary.apy.bluefinFundingApr} (${summary.apy.fundingSource || 'Live Index'})`);
   console.log(`    • Protocol Performance Fee: ${summary.performanceFeePct} (Zero management fee)`);
   console.log(`    • NET INVESTOR APY:         ${summary.apy.netInvestorApy} (Delta-Neutral, USD-denominated)`);
   console.log('─'.repeat(78));

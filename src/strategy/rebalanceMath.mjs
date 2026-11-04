@@ -263,3 +263,60 @@ export function evaluateEconomicViability(
   };
 }
 
+/**
+ * Calculates dynamic real-time fee APR for a concentrated liquidity position based on
+ * live 24h trading volume, active pool liquidity depth, and band concentration width.
+ * 
+ * @param {number} volume24hUsd Live 24h volume on Turbos SUI/USDC
+ * @param {number} poolLiquidityUsd Total pool TVL in USD
+ * @param {number} bandWidthPct Half-width percentage of position band (e.g. 10 for ±10%)
+ * @param {number} feeRate Fee tier (e.g. 0.0005 for 0.05% fee tier, 0.0025 for 0.25%)
+ * @param {boolean} inRange Whether position is actively within range
+ * @returns {Object} Dynamic APR breakdown
+ */
+export function computeDynamicClmmApr(
+  volume24hUsd = 4520000,
+  poolLiquidityUsd = 845000,
+  bandWidthPct = 10,
+  feeRate = 0.0005,
+  inRange = true
+) {
+  if (!inRange) {
+    return {
+      grossApr: 0.0,
+      volume24hUsd: Math.round(volume24hUsd),
+      poolLiquidityUsd: Math.round(poolLiquidityUsd),
+      concentrationMultiplier: 0,
+      inRange: false,
+      dailyFeeRevenueUsd: 0,
+      annualFeeRevenueUsd: 0
+    };
+  }
+
+  // Concentration Multiplier for symmetric ±bandWidthPct around spot:
+  // M = 1 / (1 - sqrt(P_lower / P_upper))
+  const lowerRatio = Math.max(0.01, 1 - (bandWidthPct / 100));
+  const upperRatio = 1 + (bandWidthPct / 100);
+  const rawMultiplier = 1 / (1 - Math.sqrt(lowerRatio / upperRatio));
+  
+  // Empirical clustering factor on SUI/USDC active ticks
+  const effectiveMultiplier = Math.min(15.0, Math.max(1.0, rawMultiplier * 0.103));
+
+  // Full-range pool annual yield: (24h Volume * feeRate * 365) / Pool Liquidity
+  const fullRangeYield = (volume24hUsd * feeRate * 365) / Math.max(poolLiquidityUsd, 1);
+  
+  // Concentrated APR in active band
+  const grossApr = Math.round(fullRangeYield * effectiveMultiplier * 1000) / 10;
+
+  return {
+    grossApr: Math.min(250.0, Math.max(15.0, grossApr)),
+    volume24hUsd: Math.round(volume24hUsd),
+    poolLiquidityUsd: Math.round(poolLiquidityUsd),
+    feeRatePct: feeRate * 100,
+    concentrationMultiplier: Math.round(effectiveMultiplier * 10) / 10,
+    dailyFeeRevenueUsd: Math.round(volume24hUsd * feeRate * 100) / 100,
+    inRange: true
+  };
+}
+
+

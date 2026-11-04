@@ -4,6 +4,9 @@
 import { SUI_CONFIG } from '../config.mjs';
 import { VaultContractService } from '../services/vaultContract.mjs';
 import { computeMarketNeutralApy } from '../hedging/deltaMath.mjs';
+import { fetchLivePoolStats } from '../services/turbos.mjs';
+import { computeDynamicClmmApr } from '../strategy/rebalanceMath.mjs';
+import { fetchLivePerpFundingRate } from '../services/bluefin.mjs';
 
 export class VaultApiService {
   constructor(options = {}) {
@@ -43,16 +46,28 @@ export class VaultApiService {
    * @param {number} currentPrice 
    */
   async getPublicVaultSummary(currentPrice = 0.895) {
-    const vaultState = await this.vaultService.getVaultMetrics('0x_blusky_sui_usdc_vault', currentPrice);
-    
-    // Gross APR ~105%
-    const grossApr = 105.0;
+    const [vaultState, poolStats, liveFunding] = await Promise.all([
+      this.vaultService.getVaultMetrics('0x_blusky_sui_usdc_vault', currentPrice),
+      fetchLivePoolStats(),
+      fetchLivePerpFundingRate()
+    ]);
+
+    // Dynamic CLMM Fee APR based on live 24h pool volume and concentrated band width
+    const dynamicApr = computeDynamicClmmApr(
+      poolStats.volume24hUsd,
+      poolStats.liquidityUsd,
+      SUI_CONFIG.strategy.targetBandWidthPct || 10,
+      0.0005,
+      true
+    );
+    const grossApr = dynamicApr.grossApr;
+
     // Protocol performance fee: 10%
     const performanceFeePct = vaultState.performanceFeePct; // 10%
-    const netLpFeeApr = grossApr * (1 - performanceFeePct / 100); // 94.5%
+    const netLpFeeApr = grossApr * (1 - performanceFeePct / 100);
     
-    // Phase 2 Hedging APY: Net Fee APR + 16.4% Funding - 1.5% Churn
-    const apyMetrics = computeMarketNeutralApy(netLpFeeApr, 0.00015, 1.5);
+    // Phase 2 Hedging APY: Net Fee APR + Dynamic Funding - 1.5% Churn
+    const apyMetrics = computeMarketNeutralApy(netLpFeeApr, liveFunding.rate8h, 1.5);
 
     // Protocol Revenue estimate on $20,000 pilot
     const annualProtocolRevenueUsd = (vaultState.totalValUsd * (grossApr / 100)) * (performanceFeePct / 100);
@@ -71,7 +86,14 @@ export class VaultApiService {
         grossTradingApr: `${grossApr}%`,
         bluefinFundingApr: `+${apyMetrics.annualizedFundingApr}%`,
         protocolFeeDeduction: `-${(grossApr * (performanceFeePct / 100)).toFixed(1)}%`,
+        rehedgeChurnCost: `-${apyMetrics.rehedgeChurnCostApr}%`,
         netInvestorApy: `${apyMetrics.netMarketNeutralApy}%`,
+        isDynamic: true,
+        volume24hUsd: poolStats.volume24hUsd,
+        poolLiquidityUsd: poolStats.liquidityUsd,
+        concentrationMultiplier: dynamicApr.concentrationMultiplier,
+        fundingSource: liveFunding.source,
+        volumeSource: poolStats.source
       },
       economics: {
         dailyGrossYieldUsd: Math.round(((vaultState.totalValUsd * grossApr / 100) / 365) * 100) / 100,

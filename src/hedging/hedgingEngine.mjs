@@ -71,9 +71,15 @@ export class HedgingEngine {
     // Total Combined Portfolio USD Value
     const totalPortfolioValueUsd = clmmAssetsUsd + clmmAccruedFeesUsd + perpEquityUsd;
 
+    // Dynamic CLMM Fee APR from Turbos live pool metrics
+    const dynamicApr = await this.turbosService.getDynamicApr(
+      SUI_CONFIG.strategy.targetBandWidthPct || 10,
+      clmmAnalysis.rangeMetrics.inRange
+    );
+
     // APY Breakdown
     const apyBreakdown = computeMarketNeutralApy(
-      105.0, // Baseline ~105% gross trading fee APR
+      dynamicApr.grossApr,
       fundingInfo.rate8h,
       1.5 // ~1.5% annual churn cost for re-hedging
     );
@@ -95,7 +101,8 @@ export class HedgingEngine {
         netDeltaUsd: deltaStatus.netDeltaUsd,
         deltaNeutralityHealth: Math.abs(deltaStatus.deltaDriftPct) <= SUI_CONFIG.hedging.deltaDriftTolerancePct ? 'BALANCED' : 'RE_HEDGED'
       },
-      apyBreakdown
+      apyBreakdown,
+      clmmApr: dynamicApr
     };
 
     this.history.push(report);

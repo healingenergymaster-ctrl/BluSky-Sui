@@ -74,7 +74,10 @@ async function getLiveState() {
       accruedFeesUsdc: clmmAnalysis.accruedFees.feeB_Usdc,
       shouldRebalance: clmmAnalysis.shouldRebalance,
       rebalanceAction: clmmAnalysis.shouldRebalance ? 'REBALANCED_SIMULATED' : 'HOLDING',
-      targetNewBand: clmmAnalysis.shouldRebalance ? { lower: targetLower, upper: targetUpper } : null
+      targetNewBand: clmmAnalysis.shouldRebalance ? { lower: targetLower, upper: targetUpper } : null,
+      volume24hUsd: vaultSummary.apy.volume24hUsd,
+      poolLiquidityUsd: vaultSummary.apy.poolLiquidityUsd,
+      concentrationMultiplier: vaultSummary.apy.concentrationMultiplier
     },
     hedging: {
       market: hedgeReport.perpStatus.market,

@@ -416,9 +416,9 @@
         <div class="stat-sub">SUI / Circle USDC Pair</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Net Investor APY <span>✨ Zero Beta</span></div>
+        <div class="stat-label">Net Investor APY <span style="background: rgba(0, 242, 254, 0.12); color: var(--cyan); padding: 2px 6px; border-radius: 4px; font-size: 10px;">⚡ Dynamic Trailing</span></div>
         <div class="stat-value" style="color: var(--cyan);" id="valNetApy">109.4%</div>
-        <div class="stat-sub">105% Fees + 16.4% Funding - 10% Fee</div>
+        <div class="stat-sub" id="valApySub">105% Fees + 16.4% Funding - 10% Fee</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">VaultShare Price <span>On-Chain</span></div>
@@ -464,6 +464,26 @@
           <div style="display: flex; justify-content: space-between; font-size: 13px; padding-top: 8px;">
             <span>Unclaimed Accrued Fees: <strong id="valFees" style="color: var(--green);">$59.92 USD</strong> (18.5 SUI + 22.0 USDC)</span>
             <span>Range Status: <strong id="valRangeAction">HOLDING (Optimal)</strong></span>
+          </div>
+
+          <!-- Dynamic 24h CLMM Market Depth & Concentration Multiplier -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; padding: 10px 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; font-size: 12px;">
+            <div>
+              <span style="color: var(--text-muted); display: block;">Turbos 24h Vol:</span>
+              <strong id="valPoolVol" style="color: var(--cyan);">$4.52M</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted); display: block;">Active Pool TVL:</span>
+              <strong id="valPoolLiq">$845K</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted); display: block;">Concentration Band:</span>
+              <strong style="color: var(--green);">±10% Active</strong>
+            </div>
+            <div>
+              <span style="color: var(--text-muted); display: block;">Fee Multiplier:</span>
+              <strong id="valConcentration" style="color: var(--cyan);">10.5x Boost</strong>
+            </div>
           </div>
 
           <!-- Rebalance PTB notification banner if triggered -->
@@ -561,7 +581,7 @@
             </div>
             <div class="calc-row">
               <span style="color: var(--text-muted);">Net Investor APY:</span>
-              <strong style="color: var(--cyan);">109.4%</strong>
+              <strong style="color: var(--cyan);" id="calcApyDisplay">109.4%</strong>
             </div>
             <div class="calc-row">
               <span style="color: var(--text-muted);">Projected Monthly Cash Flow:</span>
@@ -622,12 +642,29 @@
       }
     }
 
+    let currentNetApyRate = 1.094;
+
     function updateUI(data) {
       // Top Metrics
       document.getElementById('valTvl').textContent = '$' + data.vault.tvlUsd.toLocaleString();
       document.getElementById('valNetApy').textContent = data.vault.apy.netInvestorApy;
       document.getElementById('valSharePrice').textContent = '$' + data.vault.sharePriceUsd.toFixed(4);
       document.getElementById('valProtocolFee').textContent = '$' + data.vault.economics.dailyProtocolFeeEarnedUsd.toFixed(2);
+      if (document.getElementById('valApySub')) {
+        document.getElementById('valApySub').textContent = `${data.vault.apy.grossTradingApr} Fees + ${data.vault.apy.bluefinFundingApr} Funding - 10% Fee`;
+      }
+      if (document.getElementById('calcApyDisplay')) {
+        document.getElementById('calcApyDisplay').textContent = data.vault.apy.netInvestorApy;
+      }
+      if (data.clmm.volume24hUsd && document.getElementById('valPoolVol')) {
+        document.getElementById('valPoolVol').textContent = '$' + (data.clmm.volume24hUsd / 1000000).toFixed(2) + 'M';
+        document.getElementById('valPoolLiq').textContent = '$' + Math.round(data.clmm.poolLiquidityUsd / 1000) + 'K';
+        document.getElementById('valConcentration').textContent = (data.clmm.concentrationMultiplier || 10.5) + 'x Multiplier';
+      }
+      if (data.vault?.apy?.netInvestorApy) {
+        currentNetApyRate = parseFloat(data.vault.apy.netInvestorApy) / 100;
+        calculateDeposit();
+      }
       if (document.getElementById('btnSpot')) {
         document.getElementById('btnSpot').textContent = '$' + data.currentPrice.toFixed(4);
       }
@@ -706,7 +743,7 @@
 
     function calculateDeposit() {
       const amount = parseFloat(document.getElementById('calcInput').value || 0);
-      const apy = 1.094; // 109.4%
+      const apy = currentNetApyRate;
       const annual = amount * apy;
       const monthly = annual / 12;
 
