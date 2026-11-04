@@ -426,9 +426,9 @@
         <div class="stat-sub">20,000 Shares Minted</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Protocol 24h Yield <span>10% Performance</span></div>
-        <div class="stat-value" style="color: var(--green);" id="valProtocolFee">$5.75</div>
-        <div class="stat-sub">~$2,100 / year projected</div>
+        <div class="stat-label">Total Vault 24h Yield <span style="background: rgba(16, 185, 129, 0.12); color: var(--green); padding: 2px 6px; border-radius: 4px; font-size: 10px;">Gross</span></div>
+        <div class="stat-value" style="color: var(--green);" id="valGrossYield">$55.20</div>
+        <div class="stat-sub" id="valYieldSub">$49.68 to investors · $5.52 protocol fee</div>
       </div>
     </div>
 
@@ -649,7 +649,12 @@
       document.getElementById('valTvl').textContent = '$' + data.vault.tvlUsd.toLocaleString();
       document.getElementById('valNetApy').textContent = data.vault.apy.netInvestorApy;
       document.getElementById('valSharePrice').textContent = '$' + data.vault.sharePriceUsd.toFixed(4);
-      document.getElementById('valProtocolFee').textContent = '$' + data.vault.economics.dailyProtocolFeeEarnedUsd.toFixed(2);
+      if (document.getElementById('valGrossYield')) {
+        document.getElementById('valGrossYield').textContent = '$' + data.vault.economics.dailyGrossYieldUsd.toFixed(2);
+      }
+      if (document.getElementById('valYieldSub')) {
+        document.getElementById('valYieldSub').textContent = `$${data.vault.economics.dailyNetYieldUsd.toFixed(2)} to investors · $${data.vault.economics.dailyProtocolFeeEarnedUsd.toFixed(2)} protocol fee`;
+      }
       if (document.getElementById('valApySub')) {
         document.getElementById('valApySub').textContent = `${data.vault.apy.grossTradingApr} Fees + ${data.vault.apy.bluefinFundingApr} Funding - 10% Fee`;
       }
