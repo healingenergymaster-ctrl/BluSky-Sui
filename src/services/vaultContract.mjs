@@ -111,10 +111,11 @@ export class VaultContractService {
    * @param {number} currentPrice SUI spot price
    */
   async getVaultMetrics(vaultId = '0x_simulated_blusky_vault', currentPrice = 0.895) {
-    // Calibrated simulation for $20,000 pilot vault
+    // Calibrated simulation for $20,000 pilot vault at current market price
+    // Inception: $10,000 USDC + $10,000 SUI (hedged 1:1 on Bluefin) = $20,000 TVL
     const totalShares = 20000;
-    const balanceA_Sui = 4878; // ~$10,000 SUI
     const balanceB_Usdc = 10000; // $10,000 USDC
+    const balanceA_Sui = Math.round((10000 / Math.max(currentPrice, 0.01)) * 100) / 100;
     const feeRateBps = 1000; // 10%
 
     const totalValUsd = balanceA_Sui * currentPrice + balanceB_Usdc;
