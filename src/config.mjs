@@ -9,6 +9,9 @@ export const SUI_CONFIG = {
   rpcUrl: process.env.SUI_RPC_URL || 'https://fullnode.mainnet.sui.io:443',
   fallbackRpcUrl: process.env.SUI_FALLBACK_RPC || 'https://sui-mainnet-rpc.allthatnode.com',
   
+  // Protocol Monetization Treasury
+  feeTreasuryAddress: process.env.FEE_TREASURY_ADDRESS || '0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db',
+  
   // Execution Mode: 'DRY_RUN' (safe simulation) or 'LIVE' (real on-chain transactions)
   executionMode: (process.env.EXECUTION_MODE || 'DRY_RUN').toUpperCase(),
 

@@ -8,13 +8,14 @@ export const VAULT_PACKAGE_CONFIG = {
   // Move package address (published package ID on mainnet/testnet)
   packageId: process.env.BLUSKY_VAULT_PACKAGE_ID || '0x_blusky_vault_package_id',
   moduleName: 'vault',
-  defaultFeeTreasury: process.env.FEE_TREASURY_ADDRESS || '0x_protocol_fee_treasury_address',
+  defaultFeeTreasury: process.env.FEE_TREASURY_ADDRESS || '0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db',
   defaultPerformanceFeeBps: 1000 // 10.0%
 };
 
 export class VaultContractService {
   constructor(options = {}) {
     this.packageId = options.packageId || VAULT_PACKAGE_CONFIG.packageId;
+    this.feeTreasury = options.feeTreasury || VAULT_PACKAGE_CONFIG.defaultFeeTreasury;
     this.rpcClient = options.rpcClient || null;
     this.coinTypeA = options.coinTypeA || SUI_CONFIG.coins.SUI;
     this.coinTypeB = options.coinTypeB || SUI_CONFIG.coins.USDC;
@@ -182,6 +183,7 @@ export class VaultContractService {
       totalValUsd: Math.round(totalValUsd * 100) / 100,
       sharePriceUsd: Math.round(sharePriceUsd * 10000) / 10000,
       performanceFeePct: (this.state.feeRateBps || 1000) / 100,
+      feeTreasury: this.feeTreasury,
       cumulativeYieldHarvestedUsd: this.state.cumulativeYieldHarvestedUsd,
       isSimulated: true
     };

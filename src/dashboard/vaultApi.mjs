@@ -99,7 +99,8 @@ export class VaultApiService {
         dailyGrossYieldUsd: Math.round(((vaultState.totalValUsd * grossApr / 100) / 365) * 100) / 100,
         dailyNetYieldUsd: Math.round(((vaultState.totalValUsd * apyMetrics.netMarketNeutralApy / 100) / 365) * 100) / 100,
         dailyProtocolFeeEarnedUsd: Math.round(dailyProtocolRevenueUsd * 100) / 100,
-        annualProtocolFeeEarnedUsd: Math.round(annualProtocolRevenueUsd * 100) / 100
+        annualProtocolFeeEarnedUsd: Math.round(annualProtocolRevenueUsd * 100) / 100,
+        feeTreasuryAddress: vaultState.feeTreasury
       },
       safety: {
         nonCustodial: true,

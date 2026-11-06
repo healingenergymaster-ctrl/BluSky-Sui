@@ -1009,7 +1009,7 @@
               </p>
               <div style="background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255, 255, 255, 0.04);">
                 <div style="margin-bottom: 6px; color: #ffffff;">
-                  🏛️ <strong style="color: var(--yellow);">10% Performance Fee:</strong> Sent to the protocol fee treasury.
+                  🏛️ <strong style="color: var(--yellow);">10% Performance Fee:</strong> Sent to the protocol fee treasury (<span id="treasuryAddrDisplay" style="font-family: 'JetBrains Mono', monospace; color: var(--cyan);" title="0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db">0xa81a...f6db</span>).
                 </div>
                 <div style="color: #ffffff;">
                   🌾 <strong style="color: var(--green);">90% Compounded into NAV:</strong> Reinvested directly into the vault liquidity reserves.
@@ -1133,6 +1133,11 @@
       }
       if (document.getElementById('valApySub')) {
         document.getElementById('valApySub').textContent = `${data.vault.apy.grossTradingApr} Fees + ${data.vault.apy.bluefinFundingApr} Funding - 10% Fee`;
+      }
+      if (data.vault?.economics?.feeTreasuryAddress && document.getElementById('treasuryAddrDisplay')) {
+        const tAddr = data.vault.economics.feeTreasuryAddress;
+        document.getElementById('treasuryAddrDisplay').textContent = `${tAddr.slice(0, 6)}...${tAddr.slice(-4)}`;
+        document.getElementById('treasuryAddrDisplay').title = tAddr;
       }
 
       // Turbos CLMM Depth
