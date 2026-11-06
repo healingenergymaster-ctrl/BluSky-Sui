@@ -22,6 +22,7 @@ module blusky_vault::vault {
     const EInvalidShareVault: u64 = 3;
     const EFeeRateTooHigh: u64 = 4;
     const EInvalidTicks: u64 = 5;
+    const EInsufficientShares: u64 = 6;
 
     // --- Constants ---
     const MAX_FEE_BPS: u64 = 2500; // Maximum allowed performance fee: 25.0%
@@ -192,6 +193,37 @@ module blusky_vault::vault {
         });
 
         (coin_a, coin_b)
+    }
+
+    /// Splits an existing VaultShare into two separate VaultShare objects.
+    /// Allows users to withdraw any arbitrary partial amount without redeeming their full position.
+    public fun split_share<CoinA, CoinB>(
+        share: &mut VaultShare<CoinA, CoinB>,
+        split_shares: u64,
+        ctx: &mut TxContext
+    ): VaultShare<CoinA, CoinB> {
+        assert!(split_shares > 0, EZeroShares);
+        assert!(share.shares > split_shares, EInsufficientShares);
+
+        share.shares = share.shares - split_shares;
+
+        VaultShare<CoinA, CoinB> {
+            id: object::new(ctx),
+            vault_id: share.vault_id,
+            shares: split_shares,
+        }
+    }
+
+    /// Merges two VaultShare objects belonging to the same vault.
+    public fun merge_shares<CoinA, CoinB>(
+        share_to_keep: &mut VaultShare<CoinA, CoinB>,
+        share_to_burn: VaultShare<CoinA, CoinB>
+    ) {
+        let VaultShare { id, vault_id, shares } = share_to_burn;
+        object::delete(id);
+
+        assert!(share_to_keep.vault_id == vault_id, EInvalidShareVault);
+        share_to_keep.shares = share_to_keep.shares + shares;
     }
 
     // --- Operator Actions: Yield Harvesting & Rebalancing ---

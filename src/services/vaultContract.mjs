@@ -101,6 +101,38 @@ export class VaultContractService {
   }
 
   /**
+   * Constructs a PTB for partial user share redemption using split_share.
+   * Allows redeeming any arbitrary share amount atomically in one transaction block.
+   * @param {string} vaultId 
+   * @param {string} shareId VaultShare object ID
+   * @param {number|bigint} splitShares Number of shares to split and redeem
+   * @param {string} recipient 
+   */
+  buildPartialWithdrawTx({ vaultId, shareId, splitShares, recipient }) {
+    const tx = new Transaction();
+    const splitShareObj = tx.moveCall({
+      target: `${this.packageId}::vault::split_share`,
+      typeArguments: [this.coinTypeA, this.coinTypeB],
+      arguments: [
+        tx.object(shareId),
+        tx.pure.u64(splitShares)
+      ]
+    });
+
+    const [coinA, coinB] = tx.moveCall({
+      target: `${this.packageId}::vault::withdraw`,
+      typeArguments: [this.coinTypeA, this.coinTypeB],
+      arguments: [
+        tx.object(vaultId),
+        splitShareObj
+      ]
+    });
+
+    tx.transferObjects([coinA, coinB], tx.pure.address(recipient));
+    return tx;
+  }
+
+  /**
    * Constructs an operator PTB to deduct 10% performance fee and auto-compound the remaining 90%.
    * @param {string} operatorCapId OperatorCap object ID
    * @param {string} vaultId Shared Vault object ID
