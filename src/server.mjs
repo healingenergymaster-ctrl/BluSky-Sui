@@ -104,6 +104,8 @@ async function getLiveState(userAddress = null) {
     },
     vault: vaultSummary,
     userPosition,
+    network: SUI_CONFIG.network,
+    isTestnet: SUI_CONFIG.isTestnet,
     timestamp: new Date().toISOString()
   };
 }

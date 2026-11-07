@@ -669,7 +669,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <div class="badge badge-network">● Sui Mainnet</div>
+        <div class="badge badge-network" id="networkBadge">● Sui Mainnet</div>
         <div class="badge badge-sim">⚙️ DRY_RUN Simulation</div>
         <!-- Wallet Connect / Status Button -->
         <button id="walletBtn" class="wallet-btn" onclick="openWalletModal()">
@@ -1114,6 +1114,13 @@
       currentSpotPrice = data.currentPrice || 0.895;
       currentSharePrice = data.vault.sharePriceUsd || 1.0;
       
+      if (document.getElementById('networkBadge') && data.network) {
+        const isTestnet = data.network === 'testnet';
+        document.getElementById('networkBadge').textContent = isTestnet ? '💧 Sui Testnet' : '● Sui Mainnet';
+        document.getElementById('networkBadge').style.borderColor = isTestnet ? 'rgba(56, 189, 248, 0.4)' : 'rgba(52, 211, 153, 0.4)';
+        document.getElementById('networkBadge').style.color = isTestnet ? '#38bdf8' : '#34d399';
+      }
+
       if (data.vault?.apy?.netInvestorApy) {
         currentNetApyRate = parseFloat(data.vault.apy.netInvestorApy) / 100;
       }

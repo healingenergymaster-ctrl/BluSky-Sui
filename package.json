@@ -12,7 +12,10 @@
     "simulate:drift": "node src/index.mjs --simulate-drift",
     "simulate:hedge": "node src/index.mjs --simulate-hedge",
     "vault": "node src/index.mjs --vault",
-    "test:sui": "node src/test_connection.mjs"
+    "test:sui": "node src/test_connection.mjs",
+    "test:mainnet": "node src/test_connection.mjs",
+    "test:testnet": "node src/test_connection.mjs --testnet",
+    "testnet:wallet": "node scripts/setup_testnet_wallet.mjs"
   },
   "dependencies": {
     "@mysten/sui": "^2.38.0",

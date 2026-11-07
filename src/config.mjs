@@ -1,13 +1,33 @@
 // src/config.mjs
 // Central Configuration for BluSky-Sui Protocol
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
+
+// Load default .env first
 dotenv.config();
 
+// If SUI_NETWORK is testnet or argument contains --testnet, load .env.testnet overrides
+const isTestnetMode = process.env.SUI_NETWORK === 'testnet' || process.argv.includes('--testnet');
+if (isTestnetMode && fs.existsSync(path.join(rootDir, '.env.testnet'))) {
+  dotenv.config({ path: path.join(rootDir, '.env.testnet'), override: true });
+}
+
+const network = process.env.SUI_NETWORK || (isTestnetMode ? 'testnet' : 'mainnet');
+const isTestnet = network === 'testnet';
+
 export const SUI_CONFIG = {
-  network: process.env.SUI_NETWORK || 'mainnet',
-  rpcUrl: process.env.SUI_RPC_URL || 'https://fullnode.mainnet.sui.io:443',
-  fallbackRpcUrl: process.env.SUI_FALLBACK_RPC || 'https://sui-mainnet-rpc.allthatnode.com',
+  network,
+  isTestnet,
+  rpcUrl: process.env.SUI_RPC_URL || (isTestnet ? 'https://fullnode.testnet.sui.io:443' : 'https://fullnode.mainnet.sui.io:443'),
+  graphqlUrl: process.env.SUI_GRAPHQL_URL || (isTestnet ? 'https://graphql.testnet.sui.io/graphql' : 'https://graphql.mainnet.sui.io/graphql'),
+  fallbackRpcUrl: process.env.SUI_FALLBACK_RPC || (isTestnet ? 'https://testnet.sui.rpcpool.com' : 'https://sui-mainnet-rpc.allthatnode.com'),
   
   // Protocol Monetization Treasury
   feeTreasuryAddress: process.env.FEE_TREASURY_ADDRESS || '0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db',
