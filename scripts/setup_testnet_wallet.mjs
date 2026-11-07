@@ -104,7 +104,6 @@ HEDGING_ENABLED=false
         address(address: $address) {
           balance(coinType: "0x2::sui::SUI") {
             totalBalance
-            coinObjectCount
           }
         }
       }
@@ -119,8 +118,7 @@ HEDGING_ENABLED=false
       totalBalanceMist = BigInt(balanceData.totalBalance);
     }
     const suiBalance = (Number(totalBalanceMist) / 1e9).toFixed(4);
-    const coinCount = balanceData?.coinObjectCount || 0;
-    console.log(`💰 Current SUI Balance: \x1b[36m${suiBalance} SUI\x1b[0m (${totalBalanceMist.toString()} MIST in ${coinCount} coin object(s))\n`);
+    console.log(`💰 Current SUI Balance: \x1b[32m${suiBalance} SUI\x1b[0m (${totalBalanceMist.toString()} MIST)\n`);
 
     if (totalBalanceMist === 0n) {
       console.log('=================================================================');
