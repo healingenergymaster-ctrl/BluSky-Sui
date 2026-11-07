@@ -6,15 +6,17 @@ import { SUI_CONFIG } from '../config.mjs';
 
 export const VAULT_PACKAGE_CONFIG = {
   // Move package address (published package ID on mainnet/testnet)
-  packageId: process.env.BLUSKY_VAULT_PACKAGE_ID || '0x_blusky_vault_package_id',
+  packageId: SUI_CONFIG.vault.packageId || process.env.VAULT_PACKAGE_ID || '0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844',
+  vaultObjectId: SUI_CONFIG.vault.objectId || process.env.VAULT_OBJECT_ID || '0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc',
   moduleName: 'vault',
-  defaultFeeTreasury: process.env.FEE_TREASURY_ADDRESS || '0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db',
+  defaultFeeTreasury: SUI_CONFIG.feeTreasuryAddress,
   defaultPerformanceFeeBps: 1000 // 10.0%
 };
 
 export class VaultContractService {
   constructor(options = {}) {
     this.packageId = options.packageId || VAULT_PACKAGE_CONFIG.packageId;
+    this.vaultObjectId = options.vaultObjectId || VAULT_PACKAGE_CONFIG.vaultObjectId;
     this.feeTreasury = options.feeTreasury || VAULT_PACKAGE_CONFIG.defaultFeeTreasury;
     this.rpcClient = options.rpcClient || null;
     this.coinTypeA = options.coinTypeA || SUI_CONFIG.coins.SUI;
