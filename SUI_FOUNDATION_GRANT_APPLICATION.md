@@ -208,14 +208,21 @@ BluSky-Sui is designed for indefinite self-sustainability from Day 1:
 
 ## 10. Competitive Landscape Comparison
 
-| Feature | Legacy EVM (Gamma / Arrakis) | Solana (Kamino) | **BluSky-Sui (Native Sui)** |
+BluSky-Sui combines the automated liquidity vault model (Gamma / Kamino) with Sui's unique native primitives:
+
+| Feature | Legacy EVM *(Gamma / Arrakis)* | Solana *(Kamino)* | **BluSky-Sui *(Native Sui)*** |
 | :--- | :--- | :--- | :--- |
-| **Execution Architecture** | Multiple transactions or proxy contracts | Rust anchor programs | **Atomic 6-Step Programmable Transaction Block (PTB)** |
-| **Execution Cost** | $15.00 – $60.00 / rebalance | $0.05 – $0.15 / rebalance | **< $0.01 / rebalance (subsidized by storage rebates)** |
-| **Rebalance Finality** | 12 – 15 seconds (MEV sandwich risk) | 400 – 800 ms | **< 390 ms (Mysticeti consensus, zero front-running)** |
-| **Delta-Neutral Hedging** | Complex off-chain routing | Limited cross-margin | **Synchronized Turbos CLMM + Bluefin Perps 1x Short** |
-| **Share Token Standard** | ERC-20 token | SPL token | **First-class Move 2024 Object (`VaultShare<T, B>`)** |
-| **Operator Security** | Custom allowances / multisigs | Program authority | **Cryptographic `OperatorCap` (Zero custody over principal)** |
+| **Execution** | Multi-tx or custom proxy | Rust anchor program | **1 Atomic PTB** *(all-or-nothing execution)* |
+| **Cost / Rebalance** | $15.00 – $60.00 | $0.05 – $0.15 | **< $0.01** *(subsidized by storage rebates)* |
+| **Finality** | 12 – 15s *(MEV sandwich risk)* | 400 – 800ms | **< 390ms** *(Mysticeti sub-second finality)* |
+| **Delta Hedging** | ❌ None / Manual | ⚠️ Limited | **✅ Automated 1x Short** *(Bluefin Perps)* |
+| **Share Standard** | ERC-20 token | SPL token | **✅ Move 2024 Object** *(`VaultShare`)* |
+| **Operator Safety** | Multisig / Approvals | Authority key | **✅ `OperatorCap`** *(zero access to principal)* |
+
+### Core Differentiators at a Glance:
+* ⚡ **100% Atomic Execution:** PTBs chain fee collection, liquidity exits, ratio swaps, and re-mints into a single transaction block—if slippage limits fail, the entire block reverts with zero loss.
+* 🛡️ **Cryptographic Safety:** The automated keeper bot holds only an `OperatorCap`. It is mathematically impossible for the bot to withdraw or steal user principal.
+* 💰 **Cost Advantage:** Burning exhausted position NFTs recovers Sui storage rebates, keeping net rebalance costs under $0.01.
 
 ---
 
