@@ -3,7 +3,7 @@
 **Project Name:** BluSky-Sui  
 **Category:** DeFi Infrastructure / Concentrated Liquidity & Yield Optimization  
 **Requested Grant Amount:** $75,000 USD (Non-dilutive, milestone-based)  
-**Project Status:** Functional Alpha (Off-Chain Execution Engine & Move 2024 Package Implemented)  
+**Project Status:** Functional Alpha & Live Testnet Verified (Move 2024 Package & Shared Vault Deployed on Sui Testnet)  
 **Target Networks:** Sui Mainnet & Testnet  
 **Primary Ecosystem Partners:** Turbos Finance, Bluefin, Cetus Protocol  
 
@@ -19,7 +19,40 @@ By leveraging Sui’s native superpowers—specifically **Programmable Transacti
 
 ---
 
-## 2. The Problem Statement & Market Opportunity
+## 2. Live Testnet Deployment & Verifiable On-Chain Proofs
+
+Unlike purely conceptual proposals, BluSky-Sui has already compiled, published, and validated its Move 2024 smart contract package and shared vault object on **Sui Testnet**. 
+
+Every core capability of the protocol—from initial asset deposit and fractional share splitting to yield compounding and protocol treasury fee routing—has been executed on-chain by Sui validators:
+
+### A. Published On-Chain Objects (Sui Testnet)
+
+| Object Role | Object ID / Address | Explorer Link |
+| :--- | :--- | :--- |
+| **Move 2024 Package** | `0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844` | [SuiVision Package View](https://testnet.suivision.xyz/package/0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844) |
+| **Shared Vault Object** | `0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc` | [SuiVision Vault View](https://testnet.suivision.xyz/object/0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc) |
+| **Package UpgradeCap** | `0x37fa2800fc91802c59e2ed4877497211e78cbe68e1644dbd5bca36eb425cd9d8` | [SuiVision UpgradeCap View](https://testnet.suivision.xyz/object/0x37fa2800fc91802c59e2ed4877497211e78cbe68e1644dbd5bca36eb425cd9d8) |
+| **Protocol AdminCap** | `0x137b746c5a05111463c49a6cd0ee8d641679a207c1cfef5d0700cb3f66b5e976` | [SuiVision AdminCap View](https://testnet.suivision.xyz/object/0x137b746c5a05111463c49a6cd0ee8d641679a207c1cfef5d0700cb3f66b5e976) |
+| **Autonomous OperatorCap** | `0x2ba5abe25e4373e72b17c503c3033b83116735714ae4ab179ebd62b5fc64c6c6` | [SuiVision OperatorCap View](https://testnet.suivision.xyz/object/0x2ba5abe25e4373e72b17c503c3033b83116735714ae4ab179ebd62b5fc64c6c6) |
+| **Protocol Fee Treasury** | `0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db` | [SuiVision Treasury Account](https://testnet.suivision.xyz/account/0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db) |
+
+---
+
+### B. 100% Verifiable On-Chain Transaction Lifecycle
+
+The complete architectural lifecycle has been tested and recorded on Sui Testnet blocks:
+
+| Protocol Action | Transaction Digest | On-Chain Verification | Latency & Gas |
+| :--- | :--- | :--- | :--- |
+| **1. Package Publication** | `6jkfDxKuKK9KYToXbpMTDmW2eFagj3Ssj7JAVfDKhSvX` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/6jkfDxKuKK9KYToXbpMTDmW2eFagj3Ssj7JAVfDKhSvX) | Verified bytecode publish; created UpgradeCap |
+| **2. Vault Instantiation** | `CPD872yWoxBDPg9xSxfkiPwt74kdBJcuDqPLHwWiyoQK` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/CPD872yWoxBDPg9xSxfkiPwt74kdBJcuDqPLHwWiyoQK) | Created shared Vault, AdminCap, and OperatorCap |
+| **3. Atomic Deposit & Share Split** | `HW3Jn5RJbsXLnwXaYSqyDJq3mUZhHPUKPTcm9eqh8RvD` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/HW3Jn5RJbsXLnwXaYSqyDJq3mUZhHPUKPTcm9eqh8RvD) | 2,448ms · Minted 100M shares & split 25% child share |
+| **4. Fee Harvest & Treasury Routing** | `AXB5PTTWfs3hQ4ANgUk5vw1Eq9X6Bo2gLHnWEYJoYq31` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/AXB5PTTWfs3hQ4ANgUk5vw1Eq9X6Bo2gLHnWEYJoYq31) | 3,094ms · 10% fee routed to treasury; 90% auto-compounded |
+| **5. Partial Share Redemption & Burn** | `EmSjHzrkVRRcwbcrAYEHeEqH8VG2hPpaJiatnx5nGM2S` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/EmSjHzrkVRRcwbcrAYEHeEqH8VG2hPpaJiatnx5nGM2S) | 1,903ms · Burned 25M shares; returned pro-rata assets |
+
+---
+
+## 3. The Problem Statement & Market Opportunity
 
 ### A. The Inherent Dilemma of Concentrated Liquidity
 In CLMMs (Turbos, Cetus), liquidity providers must concentrate capital into narrow price bands (e.g., ±7% around spot) to achieve 15x–20x capital efficiency. However:
@@ -34,7 +67,7 @@ In CLMMs (Turbos, Cetus), liquidity providers must concentrate capital into narr
 
 ---
 
-## 3. Why Sui? (Technical Differentiators)
+## 4. Why Sui? (Technical Differentiators)
 
 BluSky-Sui is fundamentally unbuildable with comparable efficiency on EVM or Solana. It directly utilizes three architectural pillars unique to Sui:
 
@@ -65,7 +98,7 @@ With Sui’s Mysticeti consensus delivering sub-400ms finality, atomic rebalance
 
 ---
 
-## 4. Product Suite
+## 5. Product Suite
 
 ### Product 1: Dynamic Volatility-Adaptive CLMM Vaults
 * **Dynamic Range Sizing:** Adjusts band widths dynamically (±6% during low-volatility accumulation; ±15% during momentum expansions) using ATR (Average True Range).
@@ -83,7 +116,7 @@ For liquidity providers who want high yields without exposure to SUI price volat
 
 ---
 
-## 5. Ecosystem Impact & Synergies
+## 6. Ecosystem Impact & Synergies
 
 | Protocol | Synergy & Value Added |
 | :--- | :--- |
@@ -94,7 +127,7 @@ For liquidity providers who want high yields without exposure to SUI price volat
 
 ---
 
-## 6. Project Roadmap & Milestone Deliverables
+## 7. Project Roadmap & Milestone Deliverables
 
 We are requesting a milestone-based grant of **$75,000 USD** distributed across four transparent deliverables:
 
@@ -102,45 +135,46 @@ We are requesting a milestone-based grant of **$75,000 USD** distributed across 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Milestone Roadmap                                 │
 │                                                                             │
-│  [M1: Prototype & PTBs] ──> [M2: Smart Contract Audit]                      │
-│     ($20,000 - COMPLETED)         ($25,000 - 6 Weeks)                       │
-│                                           │                                 │
-│                                           ▼                                 │
-│  [M4: Mainnet & Partnerships] <─── [M3: Testnet & Web App]                  │
-│     ($15,000 - 4 Weeks)                   ($15,000 - 6 Weeks)               │
+│  [M1: Prototype, PTBs & Testnet] ──> [M2: Smart Contract Audit]             │
+│     ($20,000 - COMPLETED ✅)               ($25,000 - 6 Weeks)               │
+│                                                   │                         │
+│                                                   ▼                         │
+│  [M4: Mainnet & Partnerships] <──────── [M3: Web App & SDK Packaging]       │
+│     ($15,000 - 4 Weeks)                           ($15,000 - 6 Weeks)       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Milestone 1: Core Execution Engine & PTB Builder (COMPLETED)
+### Milestone 1: Core Execution Engine, PTB Builder & Testnet Validation (COMPLETED ✅)
 * **Grant Amount:** $20,000 (Retroactive / Foundation Verification)
-* **Deliverables:**
-  * Complete off-chain TypeScript daemon and monitoring infrastructure.
+* **Deliverables Completed:**
+  * Off-chain TypeScript daemon and continuous position monitoring infrastructure.
   * Turbos CLMM SDK & `@mysten/sui` v2 integration.
-  * 6-step atomic PTB rebalance builder with simulation and dry-run modes.
+  * 6-step atomic PTB rebalance builder with simulation and live execution modes.
   * Delta-neutral hedging engine and Bluefin Perps dynamic re-centering math.
-  * Move 2024 non-custodial vault contract prototype (`blusky_vault`).
-* **Verification:** Open-source repository with runnable test suite and CLI dashboard.
+  * Move 2024 non-custodial vault contract (`blusky_vault::vault`) compiled, published, and verified on **Sui Testnet** (`0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844`).
+  * On-chain lifecycle verified: atomic deposit, fractional share splitting, 10% fee routing to DAO treasury, and partial share redemption.
+* **Verification:** Open-source repository with runnable test suite, interactive web dashboard, and verified SuiVision transaction blocks.
 
 ### Milestone 2: Move Contract Security Audit & Hardening (Month 2)
 * **Grant Amount:** $25,000
 * **Deliverables:**
-  * Engage a leading Sui security auditor (e.g., OtterSec, MoveBit, or Zellic) to conduct a full formal audit of `blusky_vault::vault` and `blusky_vault::events`.
+  * Engage a leading Sui security auditor (e.g., OtterSec, MoveBit, or Zellic) to conduct a full formal audit of `blusky_vault::vault`.
   * Implement formal verification proofs for invariant safety (e.g., share dilution protection, non-extractable principal).
   * Publish the full audit report publicly.
 * **Verification:** Published audit report and clean remediation commit on GitHub.
 
-### Milestone 3: Testnet Deployment, SDK, & Web Application (Month 3–4)
+### Milestone 3: Production Web Application, SDK Packaging & Direct DEX Integration (Month 3–4)
 * **Grant Amount:** $15,000
 * **Deliverables:**
-  * Deploy `blusky_vault` to Sui Testnet.
-  * Launch responsive public web interface (Next.js/React + `@mysten/dapp-kit`) for single-click deposits, share redemptions, and real-time yield analytics.
-  * Open-source TypeScript SDK (`@blusky-sui/sdk`) for third-party protocol integrations.
-* **Verification:** Publicly accessible Testnet dApp connected to Sui testnet wallets.
+  * Production web interface upgrade using `@mysten/dapp-kit` with multi-wallet standard support (Sui Wallet, Suiet, Nightly, Martian).
+  * Direct PTB adapter wiring linking `blusky_vault::deposit` directly with live CLMM position management.
+  * Open-source TypeScript SDK (`@blusky-sui/sdk`) published to npm for third-party protocol and institutional integrations.
+* **Verification:** Production-ready web dApp and publicly accessible npm package.
 
 ### Milestone 4: Mainnet Launch, Pilot Scaling, & DEX Integration (Month 4–5)
 * **Grant Amount:** $15,000
 * **Deliverables:**
-  * Mainnet deployment of verified Move packages.
+  * Mainnet deployment of audited Move packages.
   * Seed the flagship SUI/USDC vault with initial pilot capital ($20,000–$50,000).
   * Formalize integrations and co-marketing campaigns with Turbos Finance and Bluefin.
   * Achieve **$1,000,000+ TVL** within 60 days of public launch.
@@ -148,7 +182,7 @@ We are requesting a milestone-based grant of **$75,000 USD** distributed across 
 
 ---
 
-## 7. Budget & Fund Allocation
+## 8. Budget & Fund Allocation
 
 | Category | Allocation | Description |
 | :--- | :--- | :--- |
@@ -160,7 +194,7 @@ We are requesting a milestone-based grant of **$75,000 USD** distributed across 
 
 ---
 
-## 8. Protocol Business Model & Self-Sustainability
+## 9. Protocol Business Model & Self-Sustainability
 
 BluSky-Sui is designed for indefinite self-sustainability from Day 1:
 * **Zero Management Fee:** 0% deposit or asset-management fees to encourage maximum TVL inflow.
@@ -172,7 +206,7 @@ BluSky-Sui is designed for indefinite self-sustainability from Day 1:
 
 ---
 
-## 9. Competitive Landscape Comparison
+## 10. Competitive Landscape Comparison
 
 | Feature | Legacy EVM (Gamma / Arrakis) | Solana (Kamino) | **BluSky-Sui (Native Sui)** |
 | :--- | :--- | :--- | :--- |
@@ -185,11 +219,11 @@ BluSky-Sui is designed for indefinite self-sustainability from Day 1:
 
 ---
 
-## 10. Conclusion & Request for Support
+## 11. Conclusion & Request for Support
 
 BluSky-Sui provides the missing infrastructural link required to transition Sui's concentrated liquidity from speculative, high-maintenance farming into institutional, passive capital allocation.
 
-With the core off-chain execution daemon, atomic PTB builder, and Move 2024 contract architecture already implemented and validated, grant support from the Sui Foundation will accelerate smart contract auditing, dApp deployment, and ecosystem liquidity scaling.
+With the core off-chain execution daemon, atomic PTB builder, and Move 2024 contract architecture already implemented and validated on Sui Testnet, grant support from the Sui Foundation will accelerate smart contract auditing, dApp deployment, and ecosystem liquidity scaling.
 
 We look forward to collaborating with the Sui Foundation to solidify Sui as the premier DeFi execution layer in Web3.
 
