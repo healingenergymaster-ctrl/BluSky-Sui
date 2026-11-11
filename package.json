@@ -19,9 +19,11 @@
     "testnet:publish": "node scripts/publish_testnet.mjs"
   },
   "dependencies": {
+    "@cetusprotocol/cetus-sui-clmm-sdk": "^5.4.0",
     "@mysten/sui": "^2.38.0",
-    "turbos-clmm-sdk": "^4.0.2",
     "bignumber.js": "^9.1.2",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "tslib": "^2.9.1",
+    "turbos-clmm-sdk": "^4.0.2"
   }
 }

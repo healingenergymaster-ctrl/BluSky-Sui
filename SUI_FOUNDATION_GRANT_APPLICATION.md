@@ -5,7 +5,7 @@
 **Requested Grant Amount:** $75,000 USD (Non-dilutive, milestone-based)  
 **Project Status:** Functional Alpha & Live Testnet Verified (Move 2024 Package & Shared Vault Deployed on Sui Testnet)  
 **Target Networks:** Sui Mainnet & Testnet  
-**Primary Ecosystem Partners:** Turbos Finance, Bluefin, Cetus Protocol  
+**Primary Ecosystem Partners:** Cetus Protocol (#1 Sui DEX), Turbos Finance, Bluefin Exchange  
 
 ---
 
@@ -13,7 +13,7 @@
 
 Concentrated Liquidity Market Makers (CLMMs) on Sui are currently delivering the highest trading fee yields in all of Web3, with annual percentage rates ranging from **80% to 120%+ on the SUI/USDC pair**. However, these yields are accompanied by severe operational friction: **price drift causes static positions to fall out of range within days**, freezing fee accrual to 0% and causing severe impermanent loss.
 
-**BluSky-Sui** is an autonomous, non-custodial liquidity management protocol natively architected for Sui. It automates CLMM range re-centering, continuous fee compounding, and optional **Delta-Neutral Hedging via Bluefin Perps**.
+**BluSky-Sui** is an autonomous, non-custodial liquidity management protocol natively architected for Sui. It automates CLMM range re-centering, continuous fee compounding, and optional **Delta-Neutral Hedging via Bluefin Perps** across Sui's dominant decentralized exchanges—anchored primarily by **Cetus Protocol** (70%+ market share) alongside **Turbos Finance**.
 
 By leveraging Sui’s native superpowers—specifically **Programmable Transaction Blocks (PTB)**, **Mysticeti sub-400ms finality**, and the **Move 2024 object model**—BluSky-Sui accomplishes atomic multi-step rebalancing directly on-chain with zero intermediary custody risk, sub-cent gas fees (<$0.01), and zero MEV front-running vulnerability.
 
@@ -114,13 +114,21 @@ For liquidity providers who want high yields without exposure to SUI price volat
 * **Dynamic Delta Re-Centering:** When market price moves and the CLMM pool trades between SUI and USDC, the hedging engine automatically resizes the short position to preserve $\Delta_{\text{net}} \approx 0$.
 * **Yield Stacking:** Captures ~100% CLMM fee APR plus positive perpetual funding yield (~16% APR paid by longs to shorts) = **~110%–125% Net Annualized USD Return with Zero Market Beta**.
 
+### Product 3: Dual-DEX Architecture & Smart Yield Routing (Cetus + Turbos)
+Rather than locking liquidity into a single exchange, BluSky-Sui implements a modular adapter architecture:
+* **Dedicated Flagship Vaults:**
+  * **BluSky Cetus SUI/USDC Vault:** Leverages Cetus Protocol’s deep institutional orderbooks ($25M–$60M+ 24h volume) for steady, non-dilutive fee capture.
+  * **BluSky Turbos SUI/USDC Vault:** Targets aggressive yield-farming opportunities and incentive-boosted rewards.
+* **Cross-DEX Yield Routing Engine:** Evaluates live APR spreads between Cetus and Turbos. Incorporates a **15% sustained APR spread threshold over 24 hours** before triggering pool rotations, ensuring cross-DEX rebalancing slippage never outpaces fee yield advantages.
+
 ---
 
 ## 6. Ecosystem Impact & Synergies
 
 | Protocol | Synergy & Value Added |
 | :--- | :--- |
-| **Turbos Finance & Cetus** | Concentrates liquidity permanently at the spot price, substantially deepening orderbooks, lowering trading slippage, and driving fee volume. |
+| **Cetus Protocol (#1 Sui DEX)** | Captures 70%+ of Sui DEX volume; BluSky solves the dormant capital problem by keeping liquidity permanently centered at spot, drastically reducing user slippage. |
+| **Turbos Finance** | Channels targeted automated LP capital to Turbos CLMM pools, driving trading fee velocity and deepening liquidity depth. |
 | **Bluefin Exchange** | Channels continuous hedging volume, increases sustained open interest (OI), and stabilizes perpetual funding rates. |
 | **Scallop & Navi Protocol** | Transferable `VaultShare<SUI_USDC>` tokens create high-yielding collateral assets for lending markets. |
 | **Sui Network Overall** | Establishes a premier native liquidity layer, attracting institutional capital and TVL seeking automated, non-custodial yield. |
@@ -139,7 +147,7 @@ We are requesting a milestone-based grant of **$75,000 USD** distributed across 
 │     ($20,000 - COMPLETED ✅)               ($25,000 - 6 Weeks)               │
 │                                                   │                         │
 │                                                   ▼                         │
-│  [M4: Mainnet & Partnerships] <──────── [M3: Web App & SDK Packaging]       │
+│  [M4: Mainnet & Dual-DEX Scaling] <──── [M3: Cetus/Turbos Web App & SDK]    │
 │     ($15,000 - 4 Weeks)                           ($15,000 - 6 Weeks)       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -148,7 +156,7 @@ We are requesting a milestone-based grant of **$75,000 USD** distributed across 
 * **Grant Amount:** $20,000 (Retroactive / Foundation Verification)
 * **Deliverables Completed:**
   * Off-chain TypeScript daemon and continuous position monitoring infrastructure.
-  * Turbos CLMM SDK & `@mysten/sui` v2 integration.
+  * Turbos CLMM SDK & Cetus SDK (`@cetusprotocol/cetus-sui-clmm-sdk`) modular integration.
   * 6-step atomic PTB rebalance builder with simulation and live execution modes.
   * Delta-neutral hedging engine and Bluefin Perps dynamic re-centering math.
   * Move 2024 non-custodial vault contract (`blusky_vault::vault`) compiled, published, and verified on **Sui Testnet** (`0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844`).
@@ -163,20 +171,20 @@ We are requesting a milestone-based grant of **$75,000 USD** distributed across 
   * Publish the full audit report publicly.
 * **Verification:** Published audit report and clean remediation commit on GitHub.
 
-### Milestone 3: Production Web Application, SDK Packaging & Direct DEX Integration (Month 3–4)
+### Milestone 3: Production Web Application, SDK Packaging & Cetus/Turbos Integration (Month 3–4)
 * **Grant Amount:** $15,000
 * **Deliverables:**
   * Production web interface upgrade using `@mysten/dapp-kit` with multi-wallet standard support (Sui Wallet, Suiet, Nightly, Martian).
-  * Direct PTB adapter wiring linking `blusky_vault::deposit` directly with live CLMM position management.
+  * Direct PTB adapter wiring linking `blusky_vault::deposit` directly with live Cetus and Turbos CLMM pool positions.
   * Open-source TypeScript SDK (`@blusky-sui/sdk`) published to npm for third-party protocol and institutional integrations.
 * **Verification:** Production-ready web dApp and publicly accessible npm package.
 
-### Milestone 4: Mainnet Launch, Pilot Scaling, & DEX Integration (Month 4–5)
+### Milestone 4: Mainnet Launch, Dual-DEX Pilot Scaling, & Ecosystem Growth (Month 4–5)
 * **Grant Amount:** $15,000
 * **Deliverables:**
   * Mainnet deployment of audited Move packages.
-  * Seed the flagship SUI/USDC vault with initial pilot capital ($20,000–$50,000).
-  * Formalize integrations and co-marketing campaigns with Turbos Finance and Bluefin.
+  * Seed the flagship Cetus & Turbos SUI/USDC vaults with initial pilot capital ($20,000–$50,000).
+  * Formalize integrations and co-marketing campaigns with Cetus Protocol, Turbos Finance, and Bluefin.
   * Achieve **$1,000,000+ TVL** within 60 days of public launch.
 * **Verification:** Mainnet package verified on SuiScan/Suivision; TVL verifiable on DefiLlama.
 
