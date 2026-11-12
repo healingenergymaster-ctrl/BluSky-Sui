@@ -68,6 +68,8 @@ export const SUI_CONFIG = {
   // Target DEX Pools
   pools: {
     turbos_sui_usdc: process.env.TURBOS_SUI_USDC_POOL || '0x5eb2dfcdd1b1552029717180891a9019a77212783a03460e536452f45f95b6ec',
+    cetus_sui_usdc: process.env.CETUS_SUI_USDC_POOL || (isTestnet ? '0x9483321d2de3e990b7978508eb67503dcf52a03e67dc40eb25a66beee977a493' : '0xc8d7a1503dc509f80e611a31881748a59e7591060e495e803fa70016ff2572dd'),
+    cetus_sui_usdc_tight: '0x2e041f3fd9202309ce711a7bac9316b8ebb16d62cc9ab4d0e4085f32d022b927',
     bluefin_sui_usdc: process.env.BLUEFIN_SUI_USDC_POOL || ''
   },
 
@@ -95,5 +97,13 @@ export const SUI_CONFIG = {
     deltaDriftTolerancePct: Number(process.env.DELTA_DRIFT_TOLERANCE_PCT || 5.0), // Re-hedge when delta drifts >5%
     rehedgeMinSuiAmount: Number(process.env.REHEDGE_MIN_SUI_AMOUNT || 10.0), // Minimum adjustment size in SUI
     fundingRateIntervalHours: 8
+  },
+
+  // Smart Yield Routing (Dual-DEX Cetus + Turbos)
+  yieldRouting: {
+    enabled: process.env.YIELD_ROUTING_ENABLED !== 'false',
+    minAprSpreadPct: Number(process.env.YIELD_ROUTING_MIN_SPREAD_PCT || 15.0), // 15% net APR spread required
+    spreadCooldownHours: Number(process.env.YIELD_ROUTING_COOLDOWN_HOURS || 24),
+    primaryDex: process.env.PRIMARY_DEX || 'cetus' // 'cetus' or 'turbos'
   }
 };

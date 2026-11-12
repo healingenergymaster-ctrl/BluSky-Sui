@@ -724,7 +724,12 @@
         <!-- CLMM Position Health Panel -->
         <div class="panel">
           <div class="panel-header">
-            <div class="panel-title">🎯 Turbos CLMM Active Range Monitor</div>
+            <div>
+              <div class="panel-title">🎯 Cetus Protocol CLMM Active Range Monitor</div>
+              <div style="font-size: 11px; color: var(--cyan); margin-top: 3px;">
+                🔄 Smart Yield Router: Cetus Gross APR <span id="valCetusApr">250%</span> | Turbos <span id="valTurbosApr">180%</span> (Spread: <span id="valSpreadPct">+70%</span>)
+              </div>
+            </div>
             <div class="badge" id="clmmBadge" style="background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3);">
               ● OPTIMAL 100% APR ZONE
             </div>
@@ -1160,6 +1165,13 @@
         const tAddr = data.vault.economics.feeTreasuryAddress;
         document.getElementById('treasuryAddrDisplay').textContent = `${tAddr.slice(0, 6)}...${tAddr.slice(-4)}`;
         document.getElementById('treasuryAddrDisplay').title = tAddr;
+      }
+
+      // Dual-DEX Yield Routing
+      if (data.vault?.dualDexRouting) {
+        if (document.getElementById('valCetusApr')) document.getElementById('valCetusApr').textContent = data.vault.dualDexRouting.cetusGrossApr;
+        if (document.getElementById('valTurbosApr')) document.getElementById('valTurbosApr').textContent = data.vault.dualDexRouting.turbosGrossApr;
+        if (document.getElementById('valSpreadPct')) document.getElementById('valSpreadPct').textContent = '+' + data.vault.dualDexRouting.spreadPct + '%';
       }
 
       // Turbos CLMM Depth

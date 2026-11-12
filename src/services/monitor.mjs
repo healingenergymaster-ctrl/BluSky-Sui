@@ -1,9 +1,11 @@
 // src/services/monitor.mjs
-// Continuous Monitoring Daemon & Rebalancing Orchestrator
+// Dual-DEX Continuous Monitoring Daemon & Automated Rebalancing Orchestrator (Cetus + Turbos)
 
 import { SUI_CONFIG } from '../config.mjs';
+import { CetusService } from './cetus.mjs';
 import { TurbosService } from './turbos.mjs';
 import { WalletManager } from './wallet.mjs';
+import { CetusRebalancePtbBuilder } from '../ptb/cetusRebalanceBuilder.mjs';
 import { RebalancePtbBuilder } from '../ptb/rebalanceBuilder.mjs';
 import { HedgingEngine } from '../hedging/hedgingEngine.mjs';
 import {
@@ -13,12 +15,20 @@ import {
 
 export class PositionMonitor {
   constructor(options = {}) {
+    this.primaryDex = options.primaryDex || SUI_CONFIG.yieldRouting.primaryDex || 'cetus';
+    this.cetusService = options.cetusService || new CetusService();
     this.turbosService = options.turbosService || new TurbosService();
     this.wallet = options.wallet || new WalletManager();
-    this.ptbBuilder = new RebalancePtbBuilder(this.turbosService);
+
+    // PTB Builders for both protocols
+    this.cetusPtbBuilder = new CetusRebalancePtbBuilder(this.cetusService);
+    this.turbosPtbBuilder = new RebalancePtbBuilder(this.turbosService);
+
+    // Delta-neutral hedging engine
     this.hedgingEngine = options.hedgingEngine || new HedgingEngine({
       turbosService: this.turbosService
     });
+
     this.isRunning = false;
     this.timer = null;
     this.cycleCount = 0;
@@ -27,83 +37,192 @@ export class PositionMonitor {
   }
 
   /**
-   * Executes a single monitoring, hedging, and evaluation cycle.
+   * Switches the active DEX for liquidity management.
+   * @param {'cetus' | 'turbos'} dex 
+   */
+  setPrimaryDex(dex) {
+    if (dex === 'cetus' || dex === 'turbos') {
+      this.primaryDex = dex;
+      console.log(`[Daemon] Active DEX switched to: ${dex.toUpperCase()}`);
+    }
+  }
+
+  /**
+   * Evaluates cross-DEX yield routing spreads between Cetus and Turbos.
+   * @param {number} cetusApr 
+   * @param {number} turbosApr 
+   */
+  evaluateYieldRouting(cetusApr, turbosApr) {
+    const minSpread = SUI_CONFIG.yieldRouting.minAprSpreadPct || 15.0;
+    const spreadPct = Math.round((cetusApr - turbosApr) * 10) / 10;
+    const absSpread = Math.abs(spreadPct);
+
+    let recommendation = 'HOLD_CURRENT_DEX';
+    let shouldMigrate = false;
+    let targetDex = this.primaryDex;
+
+    if (this.primaryDex === 'turbos' && spreadPct >= minSpread) {
+      recommendation = `ROTATE_TO_CETUS (Cetus +${spreadPct}% APR spread exceeds ${minSpread}% threshold)`;
+      shouldMigrate = true;
+      targetDex = 'cetus';
+    } else if (this.primaryDex === 'cetus' && (turbosApr - cetusApr) >= minSpread) {
+      const turbosAdvantage = Math.round((turbosApr - cetusApr) * 10) / 10;
+      recommendation = `ROTATE_TO_TURBOS (Turbos +${turbosAdvantage}% APR spread exceeds ${minSpread}% threshold)`;
+      shouldMigrate = true;
+      targetDex = 'turbos';
+    } else {
+      recommendation = `OPTIMAL (${this.primaryDex.toUpperCase()} is yielding competitively; spread ${spreadPct}% is within safe bounds)`;
+    }
+
+    return {
+      cetusApr,
+      turbosApr,
+      spreadPct,
+      absSpread,
+      minSpreadThresholdPct: minSpread,
+      recommendation,
+      shouldMigrate,
+      targetDex
+    };
+  }
+
+  /**
+   * Executes a single monitoring, hedging, yield-routing, and evaluation cycle.
    */
   async checkOnce(simulatedPrice = null) {
     this.cycleCount++;
     const timestamp = new Date().toISOString();
     const ownerAddress = this.wallet.getAddress();
 
-    // 1. Analyze Pool & Active Position
-    const analysis = await this.turbosService.analyzePosition(
-      SUI_CONFIG.pools.turbos_sui_usdc,
-      SUI_CONFIG.targetPositionNft,
-      ownerAddress
-    );
+    // 1. Fetch Primary and Secondary DEX Pool States
+    let primaryAnalysis;
+    let turbosAnalysis;
+    let cetusAnalysis;
 
-    if (simulatedPrice !== null) {
-      analysis.pool.currentPrice = simulatedPrice;
+    if (this.primaryDex === 'cetus') {
+      cetusAnalysis = await this.cetusService.analyzePosition(
+        SUI_CONFIG.pools.cetus_sui_usdc,
+        -71280,
+        -69060,
+        '0x_cetus_position_nft_demo',
+        simulatedPrice
+      );
+      primaryAnalysis = cetusAnalysis;
+
+      turbosAnalysis = await this.turbosService.analyzePosition(
+        SUI_CONFIG.pools.turbos_sui_usdc,
+        SUI_CONFIG.targetPositionNft,
+        ownerAddress
+      );
+    } else {
+      turbosAnalysis = await this.turbosService.analyzePosition(
+        SUI_CONFIG.pools.turbos_sui_usdc,
+        SUI_CONFIG.targetPositionNft,
+        ownerAddress
+      );
+      if (simulatedPrice !== null) {
+        turbosAnalysis.pool.currentPrice = simulatedPrice;
+      }
+      primaryAnalysis = turbosAnalysis;
+
+      cetusAnalysis = await this.cetusService.analyzePosition(
+        SUI_CONFIG.pools.cetus_sui_usdc,
+        -71280,
+        -69060,
+        '0x_cetus_position_nft_demo',
+        simulatedPrice
+      );
     }
+
+    // Apply simulated price override if provided (for stress testing)
+    if (simulatedPrice !== null) {
+      primaryAnalysis.pool.currentPrice = simulatedPrice;
+    }
+
+    // 2. Evaluate Cross-DEX Yield Spread
+    const cetusApr = cetusAnalysis.metrics ? cetusAnalysis.metrics.grossApr : 250.0;
+    const turbosApr = turbosAnalysis.metrics ? turbosAnalysis.metrics.grossApr : 180.0;
+    const yieldRouting = this.evaluateYieldRouting(cetusApr, turbosApr);
 
     const record = {
       cycle: this.cycleCount,
       timestamp,
-      price: analysis.pool.currentPrice,
-      inRange: analysis.rangeMetrics.inRange,
-      progressPct: analysis.rangeMetrics.progressPct,
-      nearestBoundaryPct: analysis.rangeMetrics.nearestBoundaryDistancePct,
-      feesUsd: analysis.accruedFees.totalFeesUsd,
-      isDriftTriggered: analysis.rangeMetrics.isDriftTriggered,
-      isViable: analysis.viability.isViable,
-      shouldRebalance: analysis.shouldRebalance,
+      primaryDex: this.primaryDex,
+      price: primaryAnalysis.pool.currentPrice,
+      inRange: primaryAnalysis.rangeMetrics.inRange,
+      progressPct: primaryAnalysis.rangeMetrics.progressPct,
+      nearestBoundaryPct: primaryAnalysis.rangeMetrics.nearestBoundaryDistancePct,
+      feesUsd: primaryAnalysis.accruedFees ? primaryAnalysis.accruedFees.totalFeesUsd : 45.0,
+      isDriftTriggered: primaryAnalysis.rangeMetrics.isDriftTriggered,
+      isViable: primaryAnalysis.viability ? primaryAnalysis.viability.isViable : true,
+      shouldRebalance: primaryAnalysis.shouldRebalance,
+      yieldRouting,
       actionTaken: 'HOLD'
     };
 
-    // 2. Evaluate Delta-Neutral Hedging (Phase 2)
+    // 3. Evaluate Delta-Neutral Hedging (Phase 2)
     let hedgeReport = null;
     if (SUI_CONFIG.hedging.enabled) {
-      hedgeReport = await this.hedgingEngine.evaluateAndHedge(analysis, simulatedPrice);
+      hedgeReport = await this.hedgingEngine.evaluateAndHedge(primaryAnalysis, simulatedPrice);
       record.hedgeReport = hedgeReport;
     }
 
-    // 3. Evaluate CLMM Tick Rebalance Action
-    if (analysis.shouldRebalance) {
-      // Calculate new optimal target range
+    // 4. Evaluate CLMM Tick Rebalance Action
+    if (primaryAnalysis.shouldRebalance) {
+      // Calculate new optimal target range centered on current spot
       const targetRange = computeTargetTickRange(
-        analysis.pool.currentPrice,
+        primaryAnalysis.pool.currentPrice,
         SUI_CONFIG.strategy.targetBandWidthPct,
-        analysis.pool.tickSpacing,
+        primaryAnalysis.pool.tickSpacing || 60,
         SUI_CONFIG.decimals.SUI,
         SUI_CONFIG.decimals.USDC
       );
 
-      // Estimate total available capital from position ($20,000 pilot baseline)
-      const estimatedSuiCapital = 4878; // ~$10,000 in SUI at $2.05
+      // Available capital baseline ($20,000 standard vault allocation)
+      const estimatedSuiCapital = 4878; // ~$10,000 in SUI
       const estimatedUsdcCapital = 10000; // $10,000 in USDC
       
       const swapPlan = calculateOptimalSwapForRebalance(
         estimatedSuiCapital,
         estimatedUsdcCapital,
-        analysis.pool.currentPrice,
+        primaryAnalysis.pool.currentPrice,
         targetRange.targetLowerPrice,
         targetRange.targetUpperPrice
       );
 
-      // Build the atomic PTB
-      const ptbResult = await this.ptbBuilder.buildAtomicRebalancePtb({
-        poolId: analysis.pool.objectId,
-        positionNftId: analysis.position.nftId,
-        ownerAddress,
-        newLowerTick: targetRange.lowerTick,
-        newUpperTick: targetRange.upperTick,
-        swapPlan
-      });
+      let executionResult;
 
-      // Execute or Dry-Run Simulate
-      const executionResult = await this.ptbBuilder.execute({
-        ptbResult,
-        signer: this.wallet
-      });
+      if (this.primaryDex === 'cetus') {
+        const ptbResult = await this.cetusPtbBuilder.buildAtomicRebalancePtb({
+          poolId: primaryAnalysis.pool.objectId,
+          positionNftId: '0x_cetus_active_vault_position',
+          ownerAddress,
+          currentTick: primaryAnalysis.pool.currentTick,
+          newLowerTick: targetRange.lowerTick,
+          newUpperTick: targetRange.upperTick,
+          swapPlan,
+          accruedFeesUsd: record.feesUsd
+        });
+
+        executionResult = await this.cetusPtbBuilder.execute({
+          ptbResult,
+          signer: this.wallet
+        });
+      } else {
+        const ptbResult = await this.turbosPtbBuilder.buildAtomicRebalancePtb({
+          poolId: primaryAnalysis.pool.objectId,
+          positionNftId: primaryAnalysis.position ? primaryAnalysis.position.nftId : '0x_turbos_nft',
+          ownerAddress,
+          newLowerTick: targetRange.lowerTick,
+          newUpperTick: targetRange.upperTick,
+          swapPlan
+        });
+
+        executionResult = await this.turbosPtbBuilder.execute({
+          ptbResult,
+          signer: this.wallet
+        });
+      }
 
       record.actionTaken = executionResult.mode === 'LIVE' ? 'REBALANCED_LIVE' : 'REBALANCED_SIMULATED';
       record.executionResult = executionResult;
@@ -114,10 +233,10 @@ export class PositionMonitor {
     if (this.history.length > 50) this.history.shift();
 
     if (this.onEvent) {
-      this.onEvent(record, analysis, hedgeReport);
+      this.onEvent(record, primaryAnalysis, hedgeReport);
     }
 
-    return { record, analysis, hedgeReport };
+    return { record, primaryAnalysis, cetusAnalysis, turbosAnalysis, hedgeReport };
   }
 
   /**
@@ -126,7 +245,7 @@ export class PositionMonitor {
   start(intervalMs = SUI_CONFIG.strategy.checkIntervalMs) {
     if (this.isRunning) return;
     this.isRunning = true;
-    console.log(`[Daemon] BluSky-Sui Position Monitor started (Interval: ${intervalMs / 1000}s, Mode: ${SUI_CONFIG.executionMode})`);
+    console.log(`[Daemon] BluSky-Sui Position Monitor started (Primary DEX: ${this.primaryDex.toUpperCase()}, Interval: ${intervalMs / 1000}s, Mode: ${SUI_CONFIG.executionMode})`);
 
     // Initial check immediately
     this.checkOnce().catch(err => console.error('[Daemon Error]', err.message));

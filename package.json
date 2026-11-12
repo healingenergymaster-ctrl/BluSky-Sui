@@ -16,7 +16,8 @@
     "test:mainnet": "node src/test_connection.mjs",
     "test:testnet": "node src/test_connection.mjs --testnet",
     "testnet:wallet": "node scripts/setup_testnet_wallet.mjs",
-    "testnet:publish": "node scripts/publish_testnet.mjs"
+    "testnet:publish": "node scripts/publish_testnet.mjs",
+    "demo:cetus": "node scripts/run_cetus_rebalance_demo.mjs"
   },
   "dependencies": {
     "@cetusprotocol/cetus-sui-clmm-sdk": "^5.4.0",

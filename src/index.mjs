@@ -41,12 +41,13 @@ function displayDashboard(analysis, record, hedgeReport) {
   console.log(`    • Pool Address:     ${analysis.pool.objectId}`);
   console.log(`    • Current SUI Price: $${analysis.pool.currentPrice.toFixed(4)} USDC`);
   console.log(`    • Pool Liquidity:   ${analysis.pool.liquidity}`);
-  console.log(`    • Pool Fee Tier:    ${(analysis.pool.fee / 10000).toFixed(2)}% (Tick Spacing: ${analysis.pool.tickSpacing})`);
+  const feeBps = analysis.pool.feeRate || analysis.pool.fee || 2500;
+  console.log(`    • Pool Fee Tier:    ${(feeBps / 10000).toFixed(2)}% (Tick Spacing: ${analysis.pool.tickSpacing})`);
   console.log('─'.repeat(78));
 
   // 2. Active CLMM Position Health
-  console.log(' 🎯 ACTIVE CLMM POSITION MONITORING (Turbos Finance)');
-  console.log(`    • Position NFT:     ${analysis.position.nftId}`);
+  console.log(` 🎯 ACTIVE CLMM POSITION MONITORING (${analysis.dex || 'Turbos Finance'})`);
+  console.log(`    • Position NFT:     ${analysis.position?.nftId || '0x_active_position'}`);
   console.log(`    • Target Range:     $${analysis.rangeMetrics.priceLower.toFixed(4)} <───> $${analysis.rangeMetrics.priceUpper.toFixed(4)}`);
   console.log(`    • Band Position:    ${renderAsciiRangeBar(analysis.rangeMetrics.progressPct)}`);
   console.log(`    • Nearest Boundary: ${analysis.rangeMetrics.nearestBoundaryDistancePct}% distance`);
@@ -55,9 +56,18 @@ function displayDashboard(analysis, record, hedgeReport) {
     ? '🚨 OUT OF RANGE (0% APR)' 
     : analysis.rangeMetrics.isDriftTriggered 
       ? '⚠️  DRIFT THRESHOLD REACHED' 
-      : '✅ OPTIMAL FEE-EARNING ZONE (~100% APR)';
+      : '✅ OPTIMAL FEE-EARNING ZONE';
   console.log(`    • Status:           ${statusBadge}`);
   console.log('─'.repeat(78));
+
+  // 2b. Smart Yield Routing (Dual-DEX Cetus + Turbos)
+  if (record.yieldRouting) {
+    console.log(' 🔄 SMART YIELD ROUTING (Dual-DEX Engine)');
+    console.log(`    • Cetus Gross APR:  ${record.yieldRouting.cetusApr}% (Primary Pool)`);
+    console.log(`    • Turbos Gross APR: ${record.yieldRouting.turbosApr}%`);
+    console.log(`    • Spread Status:    ${record.yieldRouting.recommendation}`);
+    console.log('─'.repeat(78));
+  }
 
   // 3. Delta-Neutral Hedging Layer (Phase 2)
   if (hedgeReport) {
@@ -176,9 +186,10 @@ async function main() {
   }
 
   const wallet = new WalletManager();
-  const turbosService = new TurbosService();
+  const useTurbos = args.includes('--turbos');
+  const primaryDex = useTurbos ? 'turbos' : 'cetus';
   const monitor = new PositionMonitor({
-    turbosService,
+    primaryDex,
     wallet,
     onEvent: (record, analysis, hedgeReport) => {
       displayDashboard(analysis, record, hedgeReport);
