@@ -3,6 +3,7 @@
 
 import { Transaction } from '@mysten/sui/transactions';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { normalizeStructTag } from '@mysten/sui/utils';
 import { SUI_CONFIG } from '../config.mjs';
 import { CETUS_CONFIG } from '../services/cetus.mjs';
 import { VAULT_PACKAGE_CONFIG } from '../services/vaultContract.mjs';
@@ -282,6 +283,8 @@ export class CetusRebalancePtbBuilder {
     redeployFixAmount = null,
     isFixA = false,
     isLiveRebalance = false,
+    rewardCoins = [],
+    rewarderGlobalVaultId = null,
     gasBudget = 100000000
   }) {
     const targetPoolId = poolId || this.contracts.pools.sui_usdc_025 || this.contracts.pools.sui_usdc;
@@ -343,23 +346,6 @@ export class CetusRebalancePtbBuilder {
         arguments: [optOldPos]
       });
 
-      // Step 4: Remove 100% liquidity from exhausted Position NFT & burn it for storage rebate
-      const [posLiq] = tx.moveCall({
-        target: `${cetusCallPkg}::position::liquidity`,
-        typeArguments: [],
-        arguments: [oldPos]
-      });
-      const [removedBalA, removedBalB] = tx.moveCall({
-        target: `${cetusCallPkg}::pool::remove_liquidity`,
-        typeArguments: [coinTypeA, coinTypeB],
-        arguments: [tx.object(globalConfigId), tx.object(targetPoolId), oldPos, posLiq, tx.object('0x6')]
-      });
-      tx.moveCall({
-        target: `${cetusCallPkg}::pool::close_position`,
-        typeArguments: [coinTypeA, coinTypeB],
-        arguments: [tx.object(globalConfigId), tx.object(targetPoolId), oldPos]
-      });
-
       // Merge removed liquidity balances with Vault idle/compounded balances
       const [balA] = tx.moveCall({
         target: '0x2::coin::into_balance',
@@ -371,15 +357,72 @@ export class CetusRebalancePtbBuilder {
         typeArguments: [coinTypeB],
         arguments: [idleCoinB]
       });
-      tx.moveCall({
-        target: '0x2::balance::join',
-        typeArguments: [coinTypeA],
-        arguments: [balA, removedBalA]
+
+      // Step 4: Remove 100% liquidity, collect any final fees & pool rewards, & burn exhausted NFT
+      const [posLiq] = tx.moveCall({
+        target: `${cetusCallPkg}::position::liquidity`,
+        typeArguments: [],
+        arguments: [oldPos]
       });
+      const [removedBalA, removedBalB] = tx.moveCall({
+        target: `${cetusCallPkg}::pool::remove_liquidity`,
+        typeArguments: [coinTypeA, coinTypeB],
+        arguments: [tx.object(globalConfigId), tx.object(targetPoolId), oldPos, posLiq, tx.object('0x6')]
+      });
+      tx.moveCall({ target: '0x2::balance::join', typeArguments: [coinTypeA], arguments: [balA, removedBalA] });
+      tx.moveCall({ target: '0x2::balance::join', typeArguments: [coinTypeB], arguments: [balB, removedBalB] });
+
+      // Ensure zero remaining fee balance on position after remove_liquidity
+      const [postFeeA, postFeeB] = tx.moveCall({
+        target: `${cetusCallPkg}::pool::collect_fee`,
+        typeArguments: [coinTypeA, coinTypeB],
+        arguments: [tx.object(globalConfigId), tx.object(targetPoolId), oldPos, tx.pure.bool(false)]
+      });
+      tx.moveCall({ target: '0x2::balance::join', typeArguments: [coinTypeA], arguments: [balA, postFeeA] });
+      tx.moveCall({ target: '0x2::balance::join', typeArguments: [coinTypeB], arguments: [balB, postFeeB] });
+
+      // Collect all active Cetus pool rewards so close_position passes Cetus cleanliness invariant
+      const resolvedRewardVault = rewarderGlobalVaultId || this.contracts.rewarderGlobalVaultId;
+      const normA = normalizeStructTag(coinTypeA);
+      const normB = normalizeStructTag(coinTypeB);
+      const externalRewardCoins = [];
+      if (Array.isArray(rewardCoins) && rewardCoins.length > 0 && isValidSuiObjectId(resolvedRewardVault)) {
+        for (const rawRewType of rewardCoins) {
+          const rewType = normalizeStructTag(rawRewType);
+          const [rewBal] = tx.moveCall({
+            target: `${cetusCallPkg}::pool::collect_reward`,
+            typeArguments: [coinTypeA, coinTypeB, rewType],
+            arguments: [
+              tx.object(globalConfigId),
+              tx.object(targetPoolId),
+              oldPos,
+              tx.object(resolvedRewardVault),
+              tx.pure.bool(true),
+              tx.object('0x6')
+            ]
+          });
+          if (rewType === normA) {
+            tx.moveCall({ target: '0x2::balance::join', typeArguments: [coinTypeA], arguments: [balA, rewBal] });
+          } else if (rewType === normB) {
+            tx.moveCall({ target: '0x2::balance::join', typeArguments: [coinTypeB], arguments: [balB, rewBal] });
+          } else {
+            const [rewCoin] = tx.moveCall({
+              target: '0x2::coin::from_balance',
+              typeArguments: [rewType],
+              arguments: [rewBal]
+            });
+            externalRewardCoins.push(rewCoin);
+          }
+        }
+      }
+      if (externalRewardCoins.length > 0) {
+        tx.transferObjects(externalRewardCoins, ownerAddress || SUI_CONFIG.feeTreasuryAddress);
+      }
+
       tx.moveCall({
-        target: '0x2::balance::join',
-        typeArguments: [coinTypeB],
-        arguments: [balB, removedBalB]
+        target: `${cetusCallPkg}::pool::close_position`,
+        typeArguments: [coinTypeA, coinTypeB],
+        arguments: [tx.object(globalConfigId), tx.object(targetPoolId), oldPos]
       });
 
       // Step 5 (optional): Execute on-chain flash swap if requested

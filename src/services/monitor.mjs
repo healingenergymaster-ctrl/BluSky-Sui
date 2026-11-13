@@ -255,7 +255,9 @@ export class PositionMonitor {
             coinTypeA: liveVaultSnapshot.coinTypeA,
             coinTypeB: liveVaultSnapshot.coinTypeB,
             redeployFixAmount: swapPlan.redeployFixAmount,
-            isFixA: swapPlan.isFixA
+            isFixA: swapPlan.isFixA,
+            rewardCoins: primaryAnalysis.pool.rewarders || [],
+            rewarderGlobalVaultId: this.cetusService.contracts.rewarderGlobalVaultId
           };
         } else {
           const estimatedSuiCapital = 4878;
