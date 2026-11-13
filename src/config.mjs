@@ -43,11 +43,11 @@ export const SUI_CONFIG = {
 
   // On-Chain Vault Deployment (Published Move Package & Shared Object)
   vault: {
-    packageId: process.env.VAULT_PACKAGE_ID || '0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844',
-    objectId: process.env.VAULT_OBJECT_ID || '0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc',
-    adminCap: process.env.VAULT_ADMIN_CAP || '0x137b746c5a05111463c49a6cd0ee8d641679a207c1cfef5d0700cb3f66b5e976',
-    operatorCap: process.env.VAULT_OPERATOR_CAP || '0x2ba5abe25e4373e72b17c503c3033b83116735714ae4ab179ebd62b5fc64c6c6',
-    upgradeCap: process.env.VAULT_UPGRADE_CAP || '0x37fa2800fc91802c59e2ed4877497211e78cbe68e1644dbd5bca36eb425cd9d8'
+    packageId: process.env.VAULT_PACKAGE_ID || '0xdbc40c8e2c8fce1e9d9e401725567bd07f841644ee0f78f73f7d2c6831487f30',
+    objectId: process.env.VAULT_OBJECT_ID || '0x349690a26474c0b6441ad9392e15015e286899c11f49105c25b7e8036e24bd66',
+    adminCap: process.env.VAULT_ADMIN_CAP || '0x7266318ecabcb09f4fd97bb33e75576ee3cf125deb952427de959db0eda7b4e5',
+    operatorCap: process.env.VAULT_OPERATOR_CAP || '0x1589848a2fd5a8054bc9d281a8628cf8d6afe43e29b6803b1bd4b9b117ae2cc3',
+    upgradeCap: process.env.VAULT_UPGRADE_CAP || '0x23a6d43eaffc2f1156f749d42e2b5610d8a3cd7de6bc1026706ec32240cff16f'
   },
 
   // Known Core Objects & Coins (Testnet vs Mainnet)
@@ -68,7 +68,7 @@ export const SUI_CONFIG = {
   // Target DEX Pools
   pools: {
     turbos_sui_usdc: process.env.TURBOS_SUI_USDC_POOL || '0x5eb2dfcdd1b1552029717180891a9019a77212783a03460e536452f45f95b6ec',
-    cetus_sui_usdc: process.env.CETUS_SUI_USDC_POOL || (isTestnet ? '0x9483321d2de3e990b7978508eb67503dcf52a03e67dc40eb25a66beee977a493' : '0xc8d7a1503dc509f80e611a31881748a59e7591060e495e803fa70016ff2572dd'),
+    cetus_sui_usdc: process.env.CETUS_SUI_USDC_POOL || (isTestnet ? '0xf4cac8c2720d1d250cfe50011e108db73fd3b4e9caf84fb6283ef3020b9ef576' : '0xc8d7a1503dc509f80e611a31881748a59e7591060e495e803fa70016ff2572dd'),
     cetus_sui_usdc_tight: '0x2e041f3fd9202309ce711a7bac9316b8ebb16d62cc9ab4d0e4085f32d022b927',
     bluefin_sui_usdc: process.env.BLUEFIN_SUI_USDC_POOL || ''
   },
