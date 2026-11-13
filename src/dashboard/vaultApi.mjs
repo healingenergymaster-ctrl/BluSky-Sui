@@ -6,7 +6,7 @@ import { VaultContractService } from '../services/vaultContract.mjs';
 import { computeMarketNeutralApy } from '../hedging/deltaMath.mjs';
 import { fetchLivePoolStats } from '../services/turbos.mjs';
 import { defaultCetusService } from '../services/cetus.mjs';
-import { computeDynamicClmmApr } from '../strategy/rebalanceMath.mjs';
+import { computeDynamicClmmApr, computeTargetTickRange } from '../strategy/rebalanceMath.mjs';
 import { fetchLivePerpFundingRate } from '../services/bluefin.mjs';
 
 export class VaultApiService {
@@ -47,11 +47,18 @@ export class VaultApiService {
    * @param {number} currentPrice 
    */
   async getPublicVaultSummary(currentPrice = 0.895) {
+    const activeBand = computeTargetTickRange(currentPrice, 10, 60, SUI_CONFIG.decimals.SUI, SUI_CONFIG.decimals.USDC);
     const [vaultState, poolStats, liveFunding, cetusAnalysis] = await Promise.all([
       this.vaultService.getVaultMetrics('0x_blusky_sui_usdc_vault', currentPrice),
       fetchLivePoolStats(),
       fetchLivePerpFundingRate(),
-      defaultCetusService.analyzePosition(SUI_CONFIG.pools.cetus_sui_usdc)
+      defaultCetusService.analyzePosition(
+        SUI_CONFIG.pools.cetus_sui_usdc,
+        activeBand.lowerTick,
+        activeBand.upperTick,
+        '0x_cetus_active_vault_position',
+        currentPrice
+      )
     ]);
 
     // Dynamic CLMM Fee APR based on live 24h pool volume and concentrated band width

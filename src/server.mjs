@@ -15,7 +15,9 @@ import { fileURLToPath } from 'url';
 import { SUI_CONFIG } from './config.mjs';
 import { VaultApiService } from './dashboard/vaultApi.mjs';
 import { TurbosService, fetchLiveSuiPrice } from './services/turbos.mjs';
+import { defaultCetusService } from './services/cetus.mjs';
 import { HedgingEngine } from './hedging/hedgingEngine.mjs';
+import { computeTargetTickRange } from './strategy/rebalanceMath.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,32 +32,40 @@ const vaultApi = new VaultApiService();
 const turbosService = new TurbosService();
 const hedgingEngine = new HedgingEngine({ turbosService });
 
+function resolveScenarioPrice(livePrice, scenario) {
+  if (scenario === 'drift') {
+    return Math.round(livePrice * 0.85 * 10000) / 10000; // -15% drop -> breaches ±10% band!
+  }
+  if (scenario === 'hedge') {
+    return Math.round(livePrice * 0.94 * 10000) / 10000; // -6% drop -> in-range, triggers Perp delta re-hedge
+  }
+  return livePrice;
+}
+
 async function getLiveState(userAddress = null) {
   const livePrice = await fetchLiveSuiPrice();
-  let simPrice = livePrice;
-  if (currentScenario === 'drift') {
-    simPrice = 0.78; // Below $0.8026 lower bound!
-  } else if (currentScenario === 'hedge') {
-    simPrice = 0.83; // Noticeable drop from ~$0.895
-  } else {
-    simPrice = livePrice;
-  }
+  const simPrice = resolveScenarioPrice(livePrice, currentScenario);
 
-  // 1. Analyze Position
-  const clmmAnalysis = await turbosService.analyzePosition(
-    SUI_CONFIG.pools.turbos_sui_usdc,
-    SUI_CONFIG.targetPositionNft
+  // Baseline active position is centered ±10% around live market price
+  const baselineBand = computeTargetTickRange(livePrice, 10, 60, SUI_CONFIG.decimals.SUI, SUI_CONFIG.decimals.USDC);
+
+  // 1. Analyze Primary CLMM Position (Cetus Protocol)
+  const clmmAnalysis = await defaultCetusService.analyzePosition(
+    SUI_CONFIG.pools.cetus_sui_usdc,
+    baselineBand.lowerTick,
+    baselineBand.upperTick,
+    '0x_cetus_active_vault_position',
+    simPrice
   );
-  clmmAnalysis.pool.currentPrice = simPrice;
 
   // 2. Hedging Evaluation
   const hedgeReport = await hedgingEngine.evaluateAndHedge(clmmAnalysis, simPrice);
 
-  // 3. Vault Summary
+  // 3. Vault Summary (computed using active in-range metrics)
   const vaultSummary = await vaultApi.getPublicVaultSummary(simPrice);
 
-  const targetLower = Math.round(simPrice * 0.90 * 1000) / 1000;
-  const targetUpper = Math.round(simPrice * 1.10 * 1000) / 1000;
+  const targetLower = Math.round(simPrice * 0.90 * 10000) / 10000;
+  const targetUpper = Math.round(simPrice * 1.10 * 10000) / 10000;
 
   let userPosition = null;
   if (userAddress) {
@@ -66,6 +76,7 @@ async function getLiveState(userAddress = null) {
     scenario: currentScenario,
     currentPrice: simPrice,
     clmm: {
+      dex: 'Cetus Protocol',
       poolId: clmmAnalysis.pool.objectId,
       price: simPrice,
       lowerPrice: clmmAnalysis.rangeMetrics.priceLower,
@@ -80,9 +91,9 @@ async function getLiveState(userAddress = null) {
       shouldRebalance: clmmAnalysis.shouldRebalance,
       rebalanceAction: clmmAnalysis.shouldRebalance ? 'REBALANCED_SIMULATED' : 'HOLDING',
       targetNewBand: clmmAnalysis.shouldRebalance ? { lower: targetLower, upper: targetUpper } : null,
-      volume24hUsd: vaultSummary.apy.volume24hUsd,
-      poolLiquidityUsd: vaultSummary.apy.poolLiquidityUsd,
-      concentrationMultiplier: vaultSummary.apy.concentrationMultiplier
+      volume24hUsd: clmmAnalysis.metrics.volume24hUsd,
+      poolLiquidityUsd: clmmAnalysis.metrics.liquidityUsd,
+      concentrationMultiplier: clmmAnalysis.metrics.concentrationMultiplier
     },
     hedging: {
       market: hedgeReport.perpStatus.market,
@@ -137,7 +148,7 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/user/position' && req.method === 'GET') {
     const address = reqUrl.searchParams.get('address');
-    const simPrice = (currentScenario === 'drift') ? 0.78 : ((currentScenario === 'hedge') ? 0.83 : await fetchLiveSuiPrice());
+    const simPrice = resolveScenarioPrice(await fetchLiveSuiPrice(), currentScenario);
     const position = await vaultApi.getUserPosition(address, simPrice);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, position }));
@@ -152,7 +163,7 @@ const server = http.createServer(async (req, res) => {
         const payload = JSON.parse(body || '{}');
         const userAddress = payload.userAddress || payload.address;
         const amountUsdc = parseFloat(payload.amountUsdc || payload.amount || 0);
-        const simPrice = (currentScenario === 'drift') ? 0.78 : ((currentScenario === 'hedge') ? 0.83 : await fetchLiveSuiPrice());
+        const simPrice = resolveScenarioPrice(await fetchLiveSuiPrice(), currentScenario);
         const result = await vaultApi.executeDeposit(userAddress, amountUsdc, simPrice);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, result }));
@@ -172,7 +183,7 @@ const server = http.createServer(async (req, res) => {
         const payload = JSON.parse(body || '{}');
         const userAddress = payload.userAddress || payload.address;
         const shares = parseFloat(payload.shares || payload.sharesToBurn || 0);
-        const simPrice = (currentScenario === 'drift') ? 0.78 : ((currentScenario === 'hedge') ? 0.83 : await fetchLiveSuiPrice());
+        const simPrice = resolveScenarioPrice(await fetchLiveSuiPrice(), currentScenario);
         const result = await vaultApi.executeWithdraw(userAddress, shares, simPrice);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, result }));

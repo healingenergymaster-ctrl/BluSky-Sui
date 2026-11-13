@@ -752,19 +752,19 @@
           </div>
 
           <div style="display: flex; justify-content: space-between; font-size: 13px; padding-top: 8px;">
-            <span>Unclaimed Accrued Fees: <strong id="valFees" style="color: var(--green);">$59.92 USD</strong> (18.5 SUI + 22.0 USDC)</span>
+            <span>Unclaimed Accrued Fees: <strong id="valFees" style="color: var(--green);">$67.51 USD</strong> <span id="valFeesBreakdown">(28.5 SUI + 42.0 USDC)</span></span>
             <span>Range Status: <strong id="valRangeAction">HOLDING (Optimal)</strong></span>
           </div>
 
           <!-- Dynamic 24h CLMM Market Depth & Concentration Multiplier -->
           <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; padding: 12px 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; font-size: 12px;">
             <div>
-              <span style="color: var(--text-muted); display: block;">Turbos 24h Vol:</span>
-              <strong id="valPoolVol" style="color: var(--cyan);">$4.67M</strong>
+              <span style="color: var(--text-muted); display: block;" id="lblPoolVol">Cetus 24h Vol:</span>
+              <strong id="valPoolVol" style="color: var(--cyan);">$12.50M</strong>
             </div>
             <div>
               <span style="color: var(--text-muted); display: block;">Active Pool TVL:</span>
-              <strong id="valPoolLiq">$834K</strong>
+              <strong id="valPoolLiq">$3,500K</strong>
             </div>
             <div>
               <span style="color: var(--text-muted); display: block;">Concentration Band:</span>
@@ -772,15 +772,15 @@
             </div>
             <div>
               <span style="color: var(--text-muted); display: block;">Fee Multiplier:</span>
-              <strong id="valConcentration" style="color: var(--cyan);">10.0x Boost</strong>
+              <strong id="valConcentration" style="color: var(--cyan);">1.1x Multiplier</strong>
             </div>
           </div>
 
           <!-- Rebalance PTB notification banner if triggered -->
           <div id="rebalanceNotice" style="display: none; margin-top: 16px; padding: 14px; border-radius: 12px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3);">
-            <div style="font-weight: 700; color: var(--yellow); margin-bottom: 4px;">⚡ Atomic PTB Rebalance Triggered!</div>
+            <div style="font-weight: 700; color: var(--yellow); margin-bottom: 4px;">⚡ Cetus 7-Step Atomic PTB Rebalance Triggered!</div>
             <div style="font-size: 12px; color: var(--text-main);">
-              Executed 6-step atomic block: Harvested fees -> Withdrew 100% capital -> Swapped optimal ratio -> Minted new position at <strong id="newBandText">$0.7020 <──> $0.8580</strong>.
+              Monitored range <strong id="oldBandText">$0.7270 <──> $0.8880</strong> breached drift threshold -> Harvested fees (10% treasury split) -> Burned exhausted NFT & recovered rebate -> Swapped optimal ratio -> Minted & locked new position centered at <strong id="newBandText">$0.6180 <──> $0.7550</strong>.
             </div>
           </div>
         </div>
@@ -1171,18 +1171,26 @@
       if (data.vault?.dualDexRouting) {
         if (document.getElementById('valCetusApr')) document.getElementById('valCetusApr').textContent = data.vault.dualDexRouting.cetusGrossApr;
         if (document.getElementById('valTurbosApr')) document.getElementById('valTurbosApr').textContent = data.vault.dualDexRouting.turbosGrossApr;
-        if (document.getElementById('valSpreadPct')) document.getElementById('valSpreadPct').textContent = '+' + data.vault.dualDexRouting.spreadPct + '%';
+        if (document.getElementById('valSpreadPct')) {
+          const sp = data.vault.dualDexRouting.spreadPct || '0%';
+          document.getElementById('valSpreadPct').textContent = sp.startsWith('-') ? sp : '+' + sp;
+        }
       }
 
-      // Turbos CLMM Depth
+      // CLMM Depth (Cetus Primary)
       if (data.clmm.volume24hUsd && document.getElementById('valPoolVol')) {
         document.getElementById('valPoolVol').textContent = '$' + (data.clmm.volume24hUsd / 1000000).toFixed(2) + 'M';
-        document.getElementById('valPoolLiq').textContent = '$' + Math.round(data.clmm.poolLiquidityUsd / 1000) + 'K';
-        document.getElementById('valConcentration').textContent = (data.clmm.concentrationMultiplier || 10.0) + 'x Multiplier';
+        document.getElementById('valPoolLiq').textContent = data.clmm.poolLiquidityUsd >= 1000000
+          ? '$' + (data.clmm.poolLiquidityUsd / 1000000).toFixed(2) + 'M'
+          : '$' + Math.round(data.clmm.poolLiquidityUsd / 1000) + 'K';
+        document.getElementById('valConcentration').textContent = (data.clmm.concentrationMultiplier || 1.1) + 'x Multiplier';
       }
 
       if (document.getElementById('btnSpot')) {
         document.getElementById('btnSpot').textContent = '$' + currentSpotPrice.toFixed(4);
+      }
+      if (document.getElementById('oldBandText')) {
+        document.getElementById('oldBandText').textContent = '$' + data.clmm.lowerPrice.toFixed(4) + ' <──> $' + data.clmm.upperPrice.toFixed(4);
       }
       if (data.clmm.targetNewBand && document.getElementById('newBandText')) {
         document.getElementById('newBandText').textContent = '$' + data.clmm.targetNewBand.lower.toFixed(4) + ' <──> $' + data.clmm.targetNewBand.upper.toFixed(4);
@@ -1195,6 +1203,9 @@
       document.getElementById('valProgressPct').textContent = data.clmm.progressPct.toFixed(1) + '%';
       document.getElementById('valBoundaryDist').textContent = data.clmm.nearestBoundaryPct.toFixed(1) + '%';
       document.getElementById('valFees').textContent = '$' + data.clmm.accruedFeesUsd.toFixed(2) + ' USD';
+      if (document.getElementById('valFeesBreakdown')) {
+        document.getElementById('valFeesBreakdown').textContent = `(${data.clmm.accruedFeesSui.toFixed(1)} SUI + ${data.clmm.accruedFeesUsdc.toFixed(1)} USDC)`;
+      }
       
       const fill = document.getElementById('rangeFill');
       const marker = document.getElementById('rangeMarker');
@@ -1206,17 +1217,17 @@
       const clmmBadge = document.getElementById('clmmBadge');
       const rebalanceNotice = document.getElementById('rebalanceNotice');
       if (data.clmm.shouldRebalance) {
-        clmmBadge.style.background = 'rgba(245, 158, 11, 0.15)';
-        clmmBadge.style.color = '#f59e0b';
-        clmmBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-        clmmBadge.textContent = '⚠️ DRIFT THRESHOLD REACHED';
+        clmmBadge.style.background = !data.clmm.inRange ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)';
+        clmmBadge.style.color = !data.clmm.inRange ? '#f87171' : '#f59e0b';
+        clmmBadge.style.borderColor = !data.clmm.inRange ? 'rgba(239, 68, 68, 0.35)' : 'rgba(245, 158, 11, 0.3)';
+        clmmBadge.textContent = !data.clmm.inRange ? '🚨 OUT OF RANGE — REBALANCING' : '⚠️ DRIFT THRESHOLD REACHED';
         rebalanceNotice.style.display = 'block';
         document.getElementById('valRangeAction').textContent = 'REBALANCED VIA PTB';
       } else {
         clmmBadge.style.background = 'rgba(16, 185, 129, 0.15)';
         clmmBadge.style.color = '#10b981';
         clmmBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-        clmmBadge.textContent = '● OPTIMAL 100% APR ZONE';
+        clmmBadge.textContent = '● OPTIMAL FEE-EARNING ZONE';
         rebalanceNotice.style.display = 'none';
         document.getElementById('valRangeAction').textContent = 'HOLDING (Optimal)';
       }
