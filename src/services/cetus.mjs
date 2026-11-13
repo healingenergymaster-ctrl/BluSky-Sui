@@ -3,12 +3,14 @@
 
 import { initCetusSDK, initMainnetSDK, initTestnetSDK } from '@cetusprotocol/cetus-sui-clmm-sdk/dist/index.mjs';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Transaction } from '@mysten/sui/transactions';
 import { SUI_CONFIG } from '../config.mjs';
 import {
   sqrtPriceToPrice,
   calculateRangeMetrics,
   evaluateEconomicViability,
-  computeDynamicClmmApr
+  computeDynamicClmmApr,
+  getPositionTokenAmounts
 } from '../strategy/rebalanceMath.mjs';
 import { fetchLiveSuiPrice, fetchLivePoolStats } from './turbos.mjs';
 
@@ -16,11 +18,11 @@ import { fetchLiveSuiPrice, fetchLivePoolStats } from './turbos.mjs';
 export const CETUS_CONFIG = {
   mainnet: {
     packageId: '0x1eabed72c53feb3805120a081dc15963c204dc8d091542592abaf7a35689b2fb',
-    publishedAt: '0x75b2e9ecad34944b8d0c874e3568c90db0cf9437f0d7392abfd4cb902972f3e40',
+    publishedAt: '0x260693ec785a6e6c9d81d58c7d2ff72f1288ae0fa6a9725abe05a6478b11f084', // Live v15 Mainnet package
     globalConfigId: '0xdaa46292632c3c4d8f31f23ea0f9b36a28ff3677e9684980e4438403a67a3d8f',
     pools: {
-      sui_usdc_025: '0xc8d7a1503dc509f80e611a31881748a59e7591060e495e803fa70016ff2572dd', // Primary 0.25% pool
-      sui_usdc_005: '0x2e041f3fd9202309ce711a7bac9316b8ebb16d62cc9ab4d0e4085f32d022b927'  // Stable/Tight 0.05% pool
+      sui_usdc_025: '0xb8d7d9e66a60c239e7a60110efcf8de6c705580ed924d0dde141f4a0e2c90105', // Primary 0.25% Native USDC/SUI pool
+      sui_usdc_005: '0x51e883ba7c0b566a26cbc8a94cd33eb0abd418a77cc1e60ad22fd9b1f29cd2ab'  // Tight 0.05% Native USDC/SUI pool
     }
   },
   testnet: {
@@ -96,6 +98,9 @@ export class CetusService {
             objectId: obj.objectId || poolAddress,
             coinTypeA,
             coinTypeB,
+            isCoinASui,
+            decimalsA,
+            decimalsB,
             sqrtPriceX64: String(json.current_sqrt_price),
             currentTick,
             tickSpacing: Number(json.tick_manager?.tick_spacing ?? json.position_manager?.tick_spacing ?? 60),
@@ -151,13 +156,45 @@ export class CetusService {
   }
 
   /**
-   * Fetches or simulates a Cetus CLMM Position.
+   * Fetches or simulates a Cetus CLMM Position via Sui gRPC (primary) or SDK fallback.
    * @param {string} nftId 
    * @param {number} lowerTick 
    * @param {number} upperTick 
    */
   async getPosition(nftId = '0x_cetus_position_nft_demo', lowerTick = -71280, upperTick = -69060) {
-    if (this.sdk && this.sdk.Position && nftId && !nftId.includes('demo')) {
+    const isHexId = typeof nftId === 'string' && /^0x[0-9a-fA-F]{32,64}$/.test(nftId);
+
+    if (isHexId && this.grpcClient) {
+      try {
+        const res = await this.grpcClient.getObject({
+          objectId: nftId,
+          include: { json: true }
+        });
+        const j = res?.object?.json;
+        if (j && j.pool) {
+          const toSignedTick = (bits) => {
+            const n = Number(bits ?? 0);
+            return n > 2147483647 ? n - 4294967296 : n;
+          };
+          const normType = (t) => (t && !t.startsWith('0x') ? `0x${t}` : t);
+          return {
+            nftId: res.object.objectId || nftId,
+            poolId: j.pool,
+            coinTypeA: normType(j.coin_type_a),
+            coinTypeB: normType(j.coin_type_b),
+            liquidity: String(j.liquidity ?? '0'),
+            lowerTick: toSignedTick(j.tick_lower_index?.bits),
+            upperTick: toSignedTick(j.tick_upper_index?.bits),
+            feeGrowthInsideA: String(j.fee_growth_inside_a ?? '0'),
+            feeGrowthInsideB: String(j.fee_growth_inside_b ?? '0'),
+            isSimulated: false,
+            dex: 'Cetus Protocol'
+          };
+        }
+      } catch (err) {}
+    }
+
+    if (this.sdk && this.sdk.Position && isHexId) {
       try {
         const pos = await this.sdk.Position.getPositionById(nftId);
         if (pos) {
@@ -187,6 +224,135 @@ export class CetusService {
       isSimulated: true,
       dex: 'Cetus Protocol'
     };
+  }
+
+  /**
+   * Fetches full live on-chain Vault v2 state + custodied Cetus Position NFT + raw CoinA/CoinB composition.
+   * @param {string} vaultId
+   */
+  async getVaultSnapshot(vaultId) {
+    if (!this.grpcClient || !vaultId || !/^0x[0-9a-fA-F]{32,64}$/.test(vaultId)) {
+      return null;
+    }
+
+    const res = await this.grpcClient.getObject({
+      objectId: vaultId,
+      include: { json: true }
+    });
+    const obj = res?.object;
+    const j = obj?.json;
+    if (!j) return null;
+
+    const typeMatch = obj.type?.match(/Vault<([^,>]+),\s*([^>]+)>/);
+    const coinTypeA = typeMatch ? typeMatch[1].trim() : (this.isTestnet ? SUI_CONFIG.coins.USDC : SUI_CONFIG.coins.SUI);
+    const coinTypeB = typeMatch ? typeMatch[2].trim() : (this.isTestnet ? SUI_CONFIG.coins.SUI : SUI_CONFIG.coins.USDC);
+    const idleA = BigInt(j.balance_a || '0');
+    const idleB = BigInt(j.balance_b || '0');
+    const positionNftId = j.clmm_position_id || null;
+
+    let position = null;
+    let pool = null;
+    let positionAmounts = { amountA: 0n, amountB: 0n };
+
+    if (positionNftId) {
+      position = await this.getPosition(positionNftId);
+      if (position && !position.isSimulated && position.poolId) {
+        pool = await this.getPool(position.poolId);
+        positionAmounts = getPositionTokenAmounts(
+          position.liquidity,
+          pool.sqrtPriceX64,
+          position.lowerTick,
+          position.upperTick,
+          false
+        );
+      }
+    }
+
+    return {
+      vaultId: obj.objectId || vaultId,
+      coinTypeA,
+      coinTypeB,
+      idleA,
+      idleB,
+      totalRawA: idleA + positionAmounts.amountA,
+      totalRawB: idleB + positionAmounts.amountB,
+      positionNftId,
+      position,
+      pool,
+      positionAmounts,
+      isRebalancing: Boolean(j.is_rebalancing),
+      totalShares: BigInt(j.total_shares || '0'),
+      currentLowerTick: Number(j.current_lower_tick ?? 0),
+      currentUpperTick: Number(j.current_upper_tick ?? 0)
+    };
+  }
+
+  /**
+   * Simulates zero-gas fee inspection on a Vault-custodied Cetus Position via Sui gRPC.
+   */
+  async getVaultAccruedFees(vaultId, pool, vaultPackageId = SUI_CONFIG.vault.packageId, senderAddress = SUI_CONFIG.feeTreasuryAddress) {
+    if (!this.grpcClient || !vaultId || !pool?.objectId) return null;
+
+    try {
+      const cetusCallPkg = this.contracts.publishedAt || this.contracts.packageId;
+      const posType = `${this.contracts.packageId}::position::Position`;
+      const tx = new Transaction();
+      tx.setSender(senderAddress);
+
+      const [pos] = tx.moveCall({
+        target: `${vaultPackageId}::vault::borrow_position`,
+        typeArguments: [pool.coinTypeA, pool.coinTypeB, posType],
+        arguments: [tx.object(vaultId)]
+      });
+      const [fA, fB] = tx.moveCall({
+        target: `${cetusCallPkg}::pool::collect_fee`,
+        typeArguments: [pool.coinTypeA, pool.coinTypeB],
+        arguments: [tx.object(this.contracts.globalConfigId), tx.object(pool.objectId), pos, tx.pure.bool(true)]
+      });
+      tx.moveCall({ target: '0x2::balance::value', typeArguments: [pool.coinTypeA], arguments: [fA] });
+      tx.moveCall({ target: '0x2::balance::value', typeArguments: [pool.coinTypeB], arguments: [fB] });
+      const [cA] = tx.moveCall({ target: '0x2::coin::from_balance', typeArguments: [pool.coinTypeA], arguments: [fA] });
+      const [cB] = tx.moveCall({ target: '0x2::coin::from_balance', typeArguments: [pool.coinTypeB], arguments: [fB] });
+      tx.transferObjects([cA, cB], senderAddress);
+
+      const sim = await this.grpcClient.simulateTransaction({
+        transaction: tx,
+        checksEnabled: false,
+        include: { commandResults: true }
+      });
+
+      const decodeU64 = (bcsObj) => {
+        if (!bcsObj) return 0n;
+        const bytes = bcsObj instanceof Uint8Array ? bcsObj : Uint8Array.from(Object.values(bcsObj));
+        let val = 0n;
+        for (let i = Math.min(bytes.length, 8) - 1; i >= 0; i--) {
+          val = (val << 8n) + BigInt(bytes[i]);
+        }
+        return val;
+      };
+
+      const feeRawA = decodeU64(sim?.commandResults?.[2]?.returnValues?.[0]?.bcs);
+      const feeRawB = decodeU64(sim?.commandResults?.[3]?.returnValues?.[0]?.bcs);
+      const isCoinASui = pool.coinTypeA?.endsWith('::sui::SUI');
+      const suiRaw = isCoinASui ? feeRawA : feeRawB;
+      const usdcRaw = isCoinASui ? feeRawB : feeRawA;
+      const feeA_Sui = Number(suiRaw) / 1e9;
+      const feeB_Usdc = Number(usdcRaw) / 1e6;
+      const totalFeesUsd = feeA_Sui * (pool.currentPrice || 0.8) + feeB_Usdc;
+
+      return {
+        feeA_Sui,
+        feeB_Usdc,
+        rawFeeA: feeRawA,
+        rawFeeB: feeRawB,
+        totalFeesUsd: Math.round(totalFeesUsd * 10000) / 10000,
+        protocolFeeUsd: Math.round(totalFeesUsd * 0.10 * 10000) / 10000,
+        compoundedYieldUsd: Math.round(totalFeesUsd * 0.90 * 10000) / 10000,
+        isSimulated: false
+      };
+    } catch (err) {
+      return null;
+    }
   }
 
   /**
@@ -224,14 +390,20 @@ export class CetusService {
       pool.currentPrice = simulatedPrice;
     }
     const position = await this.getPosition(nftId, lowerTick, upperTick);
+    const posIsCoinASui = position.isSimulated
+      ? true
+      : (position.coinTypeA ? position.coinTypeA.endsWith('::sui::SUI') : Boolean(pool.isCoinASui));
+    const decimalsA = posIsCoinASui ? SUI_CONFIG.decimals.SUI : SUI_CONFIG.decimals.USDC;
+    const decimalsB = posIsCoinASui ? SUI_CONFIG.decimals.USDC : SUI_CONFIG.decimals.SUI;
 
     const rangeMetrics = calculateRangeMetrics(
       pool.currentPrice,
       position.lowerTick,
       position.upperTick,
       SUI_CONFIG.strategy.driftThresholdPct,
-      SUI_CONFIG.decimals.SUI,
-      SUI_CONFIG.decimals.USDC
+      decimalsA,
+      decimalsB,
+      posIsCoinASui
     );
 
     const accruedFees = await this.getAccruedFees(

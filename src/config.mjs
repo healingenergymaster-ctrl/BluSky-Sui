@@ -68,8 +68,8 @@ export const SUI_CONFIG = {
   // Target DEX Pools
   pools: {
     turbos_sui_usdc: process.env.TURBOS_SUI_USDC_POOL || '0x5eb2dfcdd1b1552029717180891a9019a77212783a03460e536452f45f95b6ec',
-    cetus_sui_usdc: process.env.CETUS_SUI_USDC_POOL || (isTestnet ? '0xf4cac8c2720d1d250cfe50011e108db73fd3b4e9caf84fb6283ef3020b9ef576' : '0xc8d7a1503dc509f80e611a31881748a59e7591060e495e803fa70016ff2572dd'),
-    cetus_sui_usdc_tight: '0x2e041f3fd9202309ce711a7bac9316b8ebb16d62cc9ab4d0e4085f32d022b927',
+    cetus_sui_usdc: process.env.CETUS_SUI_USDC_POOL || (isTestnet ? '0xf4cac8c2720d1d250cfe50011e108db73fd3b4e9caf84fb6283ef3020b9ef576' : '0xb8d7d9e66a60c239e7a60110efcf8de6c705580ed924d0dde141f4a0e2c90105'),
+    cetus_sui_usdc_tight: '0x51e883ba7c0b566a26cbc8a94cd33eb0abd418a77cc1e60ad22fd9b1f29cd2ab',
     bluefin_sui_usdc: process.env.BLUEFIN_SUI_USDC_POOL || ''
   },
 

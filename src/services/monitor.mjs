@@ -10,7 +10,9 @@ import { RebalancePtbBuilder } from '../ptb/rebalanceBuilder.mjs';
 import { HedgingEngine } from '../hedging/hedgingEngine.mjs';
 import {
   computeTargetTickRange,
-  calculateOptimalSwapForRebalance
+  calculateOptimalSwapForRebalance,
+  computeCetusFlashSwapAndAddPlan,
+  evaluateEconomicViability
 } from '../strategy/rebalanceMath.mjs';
 
 export class PositionMonitor {
@@ -95,18 +97,52 @@ export class PositionMonitor {
     const ownerAddress = this.wallet.getAddress();
 
     // 1. Fetch Primary and Secondary DEX Pool States
+    const isLiveMode = SUI_CONFIG.executionMode === 'LIVE';
+    const liveVaultSnapshot = (this.primaryDex === 'cetus' && isLiveMode)
+      ? await this.cetusService.getVaultSnapshot(SUI_CONFIG.vault.objectId).catch(() => null)
+      : null;
+
+    if (liveVaultSnapshot?.isRebalancing) {
+      throw new Error(`Vault ${liveVaultSnapshot.vaultId} is currently locked in an active rebalance.`);
+    }
+
     let primaryAnalysis;
     let turbosAnalysis;
     let cetusAnalysis;
 
     if (this.primaryDex === 'cetus') {
+      const targetPool = liveVaultSnapshot?.pool?.objectId || SUI_CONFIG.pools.cetus_sui_usdc;
+      const posLower = liveVaultSnapshot?.position?.lowerTick ?? -71280;
+      const posUpper = liveVaultSnapshot?.position?.upperTick ?? -69060;
+      const posNftId = liveVaultSnapshot?.positionNftId || '0x_cetus_position_nft_demo';
+
       cetusAnalysis = await this.cetusService.analyzePosition(
-        SUI_CONFIG.pools.cetus_sui_usdc,
-        -71280,
-        -69060,
-        '0x_cetus_position_nft_demo',
+        targetPool,
+        posLower,
+        posUpper,
+        posNftId,
         simulatedPrice
       );
+      if (isLiveMode && liveVaultSnapshot?.positionNftId) {
+        const liveFees = await this.cetusService.getVaultAccruedFees(
+          liveVaultSnapshot.vaultId,
+          cetusAnalysis.pool,
+          SUI_CONFIG.vault.packageId,
+          ownerAddress
+        );
+        if (liveFees) {
+          cetusAnalysis.accruedFees = liveFees;
+          cetusAnalysis.viability = evaluateEconomicViability(
+            liveFees.totalFeesUsd,
+            0.008,
+            SUI_CONFIG.strategy.maxCostToFeeRatio,
+            SUI_CONFIG.strategy.minFeesBeforeRebalanceUsd,
+            !cetusAnalysis.rangeMetrics.inRange
+          );
+          cetusAnalysis.shouldRebalance =
+            cetusAnalysis.rangeMetrics.isDriftTriggered && cetusAnalysis.viability.isViable;
+        }
+      }
       primaryAnalysis = cetusAnalysis;
 
       turbosAnalysis = await this.turbosService.analyzePosition(
@@ -169,46 +205,87 @@ export class PositionMonitor {
 
     // 4. Evaluate CLMM Tick Rebalance Action
     if (primaryAnalysis.shouldRebalance) {
+      const poolIsCoinASui = primaryAnalysis.pool.isCoinASui !== undefined
+        ? Boolean(primaryAnalysis.pool.isCoinASui)
+        : true;
+      const decA = primaryAnalysis.pool.decimalsA || (poolIsCoinASui ? SUI_CONFIG.decimals.SUI : SUI_CONFIG.decimals.USDC);
+      const decB = primaryAnalysis.pool.decimalsB || (poolIsCoinASui ? SUI_CONFIG.decimals.USDC : SUI_CONFIG.decimals.SUI);
+
       // Calculate new optimal target range centered on current spot
       const targetRange = computeTargetTickRange(
         primaryAnalysis.pool.currentPrice,
         SUI_CONFIG.strategy.targetBandWidthPct,
         primaryAnalysis.pool.tickSpacing || 60,
-        SUI_CONFIG.decimals.SUI,
-        SUI_CONFIG.decimals.USDC
-      );
-
-      // Available capital baseline ($20,000 standard vault allocation)
-      const estimatedSuiCapital = 4878; // ~$10,000 in SUI
-      const estimatedUsdcCapital = 10000; // $10,000 in USDC
-      
-      const swapPlan = calculateOptimalSwapForRebalance(
-        estimatedSuiCapital,
-        estimatedUsdcCapital,
-        primaryAnalysis.pool.currentPrice,
-        targetRange.targetLowerPrice,
-        targetRange.targetUpperPrice
+        decA,
+        decB,
+        poolIsCoinASui
       );
 
       let executionResult;
 
       if (this.primaryDex === 'cetus') {
-        const ptbResult = await this.cetusPtbBuilder.buildAtomicRebalancePtb({
+        let swapPlan;
+        let ptbOptions = {
           poolId: primaryAnalysis.pool.objectId,
-          positionNftId: '0x_cetus_active_vault_position',
+          positionNftId: liveVaultSnapshot?.positionNftId || '0x_cetus_active_vault_position',
           ownerAddress,
           currentTick: primaryAnalysis.pool.currentTick,
           newLowerTick: targetRange.lowerTick,
           newUpperTick: targetRange.upperTick,
-          swapPlan,
           accruedFeesUsd: record.feesUsd
-        });
+        };
+
+        if (isLiveMode && liveVaultSnapshot?.positionNftId) {
+          swapPlan = computeCetusFlashSwapAndAddPlan({
+            rawCoinA: liveVaultSnapshot.totalRawA,
+            rawCoinB: liveVaultSnapshot.totalRawB,
+            poolSqrtPriceX64: primaryAnalysis.pool.sqrtPriceX64,
+            poolLiquidity: primaryAnalysis.pool.liquidity,
+            lowerTick: targetRange.lowerTick,
+            upperTick: targetRange.upperTick,
+            feeRateBps: primaryAnalysis.pool.feeRate || 2500
+          });
+          ptbOptions = {
+            ...ptbOptions,
+            swapPlan,
+            isLiveRebalance: true,
+            vaultId: liveVaultSnapshot.vaultId,
+            vaultPackageId: SUI_CONFIG.vault.packageId,
+            operatorCapId: SUI_CONFIG.vault.operatorCap,
+            coinTypeA: liveVaultSnapshot.coinTypeA,
+            coinTypeB: liveVaultSnapshot.coinTypeB,
+            redeployFixAmount: swapPlan.redeployFixAmount,
+            isFixA: swapPlan.isFixA
+          };
+        } else {
+          const estimatedSuiCapital = 4878;
+          const estimatedUsdcCapital = 10000;
+          swapPlan = calculateOptimalSwapForRebalance(
+            estimatedSuiCapital,
+            estimatedUsdcCapital,
+            primaryAnalysis.pool.currentPrice,
+            targetRange.targetLowerPrice,
+            targetRange.targetUpperPrice
+          );
+          ptbOptions.swapPlan = swapPlan;
+        }
+
+        const ptbResult = await this.cetusPtbBuilder.buildAtomicRebalancePtb(ptbOptions);
 
         executionResult = await this.cetusPtbBuilder.execute({
           ptbResult,
           signer: this.wallet
         });
       } else {
+        const estimatedSuiCapital = 4878;
+        const estimatedUsdcCapital = 10000;
+        const swapPlan = calculateOptimalSwapForRebalance(
+          estimatedSuiCapital,
+          estimatedUsdcCapital,
+          primaryAnalysis.pool.currentPrice,
+          targetRange.targetLowerPrice,
+          targetRange.targetUpperPrice
+        );
         const ptbResult = await this.turbosPtbBuilder.buildAtomicRebalancePtb({
           poolId: primaryAnalysis.pool.objectId,
           positionNftId: primaryAnalysis.position ? primaryAnalysis.position.nftId : '0x_turbos_nft',

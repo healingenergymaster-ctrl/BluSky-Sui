@@ -2,6 +2,8 @@
 // Precise concentrated liquidity math, range drift metrics, and optimal rebalancing swaps
 
 import BigNumber from 'bignumber.js';
+import BN from 'bn.js';
+import { ClmmPoolUtil, TickMath } from '@cetusprotocol/cetus-sui-clmm-sdk/dist/index.mjs';
 import { TurbosSdk, Network } from 'turbos-clmm-sdk';
 import { SUI_CONFIG } from '../config.mjs';
 
@@ -76,10 +78,13 @@ export function calculateRangeMetrics(
   upperTick,
   driftThresholdPct = SUI_CONFIG.strategy.driftThresholdPct,
   decimalsA = 9,
-  decimalsB = 6
+  decimalsB = 6,
+  isCoinASui = true
 ) {
-  const priceLower = tickToPrice(lowerTick, decimalsA, decimalsB);
-  const priceUpper = tickToPrice(upperTick, decimalsA, decimalsB);
+  const rawLower = tickToPrice(lowerTick, decimalsA, decimalsB);
+  const rawUpper = tickToPrice(upperTick, decimalsA, decimalsB);
+  const priceLower = isCoinASui ? rawLower : (rawUpper > 0 ? 1 / rawUpper : rawUpper);
+  const priceUpper = isCoinASui ? rawUpper : (rawLower > 0 ? 1 / rawLower : rawLower);
 
   const minP = Math.min(priceLower, priceUpper);
   const maxP = Math.max(priceLower, priceUpper);
@@ -133,13 +138,18 @@ export function computeTargetTickRange(
   bandWidthPct = SUI_CONFIG.strategy.targetBandWidthPct,
   tickSpacing = 60,
   decimalsA = 9,
-  decimalsB = 6
+  decimalsB = 6,
+  isCoinASui = true
 ) {
   const targetLowerPrice = currentPrice * (1 - bandWidthPct / 100);
   const targetUpperPrice = currentPrice * (1 + bandWidthPct / 100);
 
-  const lowerTick = priceToInitializableTick(targetLowerPrice, tickSpacing, decimalsA, decimalsB);
-  const upperTick = priceToInitializableTick(targetUpperPrice, tickSpacing, decimalsA, decimalsB);
+  // When Pool CoinA is USDC and CoinB is SUI, pool price = 1 / suiPriceUsd
+  const poolLowPrice = isCoinASui ? targetLowerPrice : (1 / targetUpperPrice);
+  const poolHighPrice = isCoinASui ? targetUpperPrice : (1 / targetLowerPrice);
+
+  const lowerTick = priceToInitializableTick(poolLowPrice, tickSpacing, decimalsA, decimalsB);
+  const upperTick = priceToInitializableTick(poolHighPrice, tickSpacing, decimalsA, decimalsB);
 
   return {
     lowerTick: Math.min(lowerTick, upperTick),
@@ -318,5 +328,193 @@ export function computeDynamicClmmApr(
     inRange: true
   };
 }
+
+/**
+ * Computes raw CoinA and CoinB token amounts currently held inside a Cetus CLMM Position
+ * using Cetus SDK's exact Q64 fixed-point math (`ClmmPoolUtil.getCoinAmountFromLiquidity`).
+ */
+export function getPositionTokenAmounts(liquidityStr, currentSqrtPriceX64Str, lowerTick, upperTick, roundUp = false) {
+  const liqBN = new BN(String(liquidityStr || '0'));
+  if (liqBN.isZero()) {
+    return { amountA: 0n, amountB: 0n };
+  }
+  const curSqrtBN = new BN(String(currentSqrtPriceX64Str));
+  const lowerSqrtBN = TickMath.tickIndexToSqrtPriceX64(Number(lowerTick));
+  const upperSqrtBN = TickMath.tickIndexToSqrtPriceX64(Number(upperTick));
+  const amounts = ClmmPoolUtil.getCoinAmountFromLiquidity(liqBN, curSqrtBN, lowerSqrtBN, upperSqrtBN, roundUp);
+  return {
+    amountA: BigInt(amounts.coinA.toString()),
+    amountB: BigInt(amounts.coinB.toString())
+  };
+}
+
+/**
+ * Computes an exact Cetus flash_swap + add_liquidity_fix_coin execution plan in raw base units
+ * so both CoinA and CoinB repayments fit safely within post-swap Vault balances.
+ */
+export function computeCetusFlashSwapAndAddPlan({
+  rawCoinA,
+  rawCoinB,
+  poolSqrtPriceX64,
+  poolLiquidity = null,
+  lowerTick,
+  upperTick,
+  feeRateBps = 2500, // Cetus fee_rate units: 2500 = 0.25% (denominator 1e6)
+  safetyBufferPct = 1.0
+}) {
+  const amtA = Number(rawCoinA || 0n);
+  const amtB = Number(rawCoinB || 0n);
+  const q64 = new BigNumber(2).pow(64);
+  const curSqrtFloat = new BigNumber(String(poolSqrtPriceX64)).dividedBy(q64);
+  const lowerSqrtBN = TickMath.tickIndexToSqrtPriceX64(Number(lowerTick));
+  const upperSqrtBN = TickMath.tickIndexToSqrtPriceX64(Number(upperTick));
+
+  // Probe exact raw CoinA/CoinB ratio for this tick range at current sqrtPrice
+  const curSqrtBN = new BN(String(poolSqrtPriceX64));
+  const probeLiq = new BN('1000000000000');
+  const ref = ClmmPoolUtil.getCoinAmountFromLiquidity(probeLiq, curSqrtBN, lowerSqrtBN, upperSqrtBN, false);
+  const refA = Number(ref.coinA.toString());
+  const refB = Number(ref.coinB.toString());
+
+  // Pool raw exchange rate: 1 raw CoinA = rawPriceBPerA raw CoinB
+  const rawPriceBPerA = curSqrtFloat.multipliedBy(curSqrtFloat).toNumber();
+  const feeDecimal = Number(feeRateBps) / 1_000_000;
+  const L = poolLiquidity ? Number(poolLiquidity) : 0;
+
+  // Estimate post-swap sqrtPrice & CoinA/CoinB outputs accounting for finite pool depth L
+  const estimatePostSwap = (isA2B, swapInRaw) => {
+    const netIn = swapInRaw * (1 - feeDecimal);
+    if (L > 0) {
+      const s0 = curSqrtFloat.toNumber();
+      if (isA2B) {
+        const s1 = (L * s0) / (L + netIn * s0);
+        const dyOut = L * (s0 - s1);
+        return { postSqrt: s1, outRaw: Math.max(0, dyOut) };
+      } else {
+        const s1 = s0 + netIn / L;
+        const dxOut = L * (1 / s0 - 1 / s1);
+        return { postSqrt: s1, outRaw: Math.max(0, dxOut) };
+      }
+    }
+    return isA2B
+      ? { postSqrt: curSqrtFloat.toNumber(), outRaw: netIn * rawPriceBPerA }
+      : { postSqrt: curSqrtFloat.toNumber(), outRaw: netIn / rawPriceBPerA };
+  };
+
+  let a2b = null;
+  let swapAmountRaw = 0n;
+  let estA = amtA;
+  let estB = amtB;
+  let postSqrtX64BN = curSqrtBN;
+
+  if (refA === 0 && refB > 0) {
+    if (amtA > 0) {
+      a2b = true;
+      swapAmountRaw = BigInt(Math.floor(amtA));
+      const est = estimatePostSwap(true, amtA);
+      estA = 0;
+      estB = amtB + est.outRaw;
+      postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
+    }
+  } else if (refB === 0 && refA > 0) {
+    if (amtB > 0) {
+      a2b = false;
+      swapAmountRaw = BigInt(Math.floor(amtB));
+      const est = estimatePostSwap(false, amtB);
+      estA = amtA + est.outRaw;
+      estB = 0;
+      postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
+    }
+  } else if (refA > 0 && refB > 0) {
+    const needRatioBToA = refB / refA;
+    const totalValInB = amtA * rawPriceBPerA + amtB;
+    const targetA = totalValInB / (rawPriceBPerA + needRatioBToA);
+
+    // Cap swap so post-swap spot stays inside [lowerTick, upperTick] even in shallow pools
+    const lowerSqrtFloat = new BigNumber(lowerSqrtBN.toString()).dividedBy(q64).toNumber();
+    const upperSqrtFloat = new BigNumber(upperSqrtBN.toString()).dividedBy(q64).toNumber();
+    const s0 = curSqrtFloat.toNumber();
+
+    if (amtA > targetA * 1.005) {
+      let dx = Math.floor(amtA - targetA);
+      if (L > 0 && s0 > lowerSqrtFloat) {
+        const maxDxInBand = Math.floor(L * (1 / lowerSqrtFloat - 1 / s0) * 0.5);
+        if (maxDxInBand > 0) dx = Math.min(dx, maxDxInBand);
+      }
+      if (dx > 0) {
+        a2b = true;
+        swapAmountRaw = BigInt(dx);
+        const est = estimatePostSwap(true, dx);
+        estA = amtA - dx;
+        estB = amtB + est.outRaw;
+        postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
+      }
+    } else if (amtA < targetA * 0.995 && amtB > 0) {
+      const targetB = targetA * needRatioBToA;
+      let dy = Math.floor(Math.max(0, amtB - targetB));
+      if (L > 0 && upperSqrtFloat > s0) {
+        const maxDyInBand = Math.floor(L * (upperSqrtFloat - s0) * 0.5);
+        if (maxDyInBand > 0) dy = Math.min(dy, maxDyInBand);
+      }
+      if (dy > 0) {
+        a2b = false;
+        swapAmountRaw = BigInt(dy);
+        const est = estimatePostSwap(false, dy);
+        estA = amtA + est.outRaw;
+        estB = amtB - dy;
+        postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
+      }
+    }
+  }
+
+  // Pick limiting coin for add_liquidity_fix_coin using post-swap sqrtPrice
+  const factor = Math.max(0.5, 1 - safetyBufferPct / 100);
+  const safeMaxA = Math.floor(estA * factor);
+  const safeMaxB = Math.floor(estB * factor);
+
+  const postRef = ClmmPoolUtil.getCoinAmountFromLiquidity(probeLiq, postSqrtX64BN, lowerSqrtBN, upperSqrtBN, false);
+  const postRefA = Number(postRef.coinA.toString());
+  const postRefB = Number(postRef.coinB.toString());
+
+  let isFixA = postRefB === 0;
+  let redeployFixAmount = isFixA ? BigInt(safeMaxA) : BigInt(safeMaxB);
+
+  if (postRefA > 0 && postRefB > 0) {
+    if (safeMaxA > 0) {
+      const testFixA = ClmmPoolUtil.estLiquidityAndcoinAmountFromOneAmounts(
+        Number(lowerTick),
+        Number(upperTick),
+        new BN(String(safeMaxA)),
+        true,
+        true,
+        0,
+        postSqrtX64BN
+      );
+      if (Number(testFixA.coinAmountB.toString()) <= safeMaxB) {
+        isFixA = true;
+        redeployFixAmount = BigInt(safeMaxA);
+      } else {
+        isFixA = false;
+        redeployFixAmount = BigInt(safeMaxB);
+      }
+    } else {
+      isFixA = false;
+      redeployFixAmount = BigInt(safeMaxB);
+    }
+  }
+
+  return {
+    executeOnChain: swapAmountRaw > 0n && a2b !== null,
+    a2b,
+    swapDirection: a2b === null ? 'NONE' : a2b ? 'A_TO_B' : 'B_TO_A',
+    swapAmountRaw,
+    isFixA,
+    redeployFixAmount,
+    estimatedPostSwapA: BigInt(Math.floor(estA)),
+    estimatedPostSwapB: BigInt(Math.floor(estB)),
+    rawPriceBPerA
+  };
+}
+
 
 

@@ -383,8 +383,8 @@ export class CetusRebalancePtbBuilder {
       });
 
       // Step 5 (optional): Execute on-chain flash swap if requested
-      if (swapPlan && swapPlan.executeOnChain && swapPlan.swapDirection && swapPlan.swapDirection !== 'NONE' && swapPlan.swapAmountRaw > 0) {
-        const a2b = swapPlan.swapDirection === 'A_TO_B';
+      if (swapPlan && swapPlan.executeOnChain && swapPlan.swapDirection && swapPlan.swapDirection !== 'NONE' && BigInt(swapPlan.swapAmountRaw || 0) > 0n) {
+        const a2b = typeof swapPlan.a2b === 'boolean' ? swapPlan.a2b : swapPlan.swapDirection === 'A_TO_B';
         const sqrtLimit = BigInt(swapPlan.sqrtPriceLimit || (a2b ? '4295048016' : '79226673515401279992447579055'));
         const [swapOutA, swapOutB, flashReceipt] = tx.moveCall({
           target: `${cetusCallPkg}::pool::flash_swap`,
@@ -492,15 +492,18 @@ export class CetusRebalancePtbBuilder {
     });
 
     // Step 5: Optimal Ratio Swap for Target Band
-    if (swapPlan && swapPlan.swapDirection && swapPlan.swapDirection !== 'NONE' && swapPlan.swapAmount > 0) {
+    if (swapPlan && swapPlan.swapDirection && swapPlan.swapDirection !== 'NONE' && ((swapPlan.swapAmount || 0) > 0 || BigInt(swapPlan.swapAmountRaw || 0) > 0n)) {
+      const amtLabel = typeof swapPlan.swapAmount === 'number'
+        ? swapPlan.swapAmount.toFixed(4)
+        : `${String(swapPlan.swapAmountRaw)} raw`;
       steps.push({
         step: 5,
         action: 'swap_optimal_ratio',
         target: `${cetusCallPkg}::pool::flash_swap`,
         direction: swapPlan.swapDirection,
-        amount: swapPlan.swapAmount,
+        amount: swapPlan.swapAmount ?? String(swapPlan.swapAmountRaw),
         estimatedReceive: swapPlan.estimatedReceiveAmount,
-        description: `Execute internal swap of ${swapPlan.swapAmount.toFixed(4)} ${swapPlan.swapDirection === 'A_TO_B' ? 'SUI -> USDC' : 'USDC -> SUI'} to achieve optimal inventory ratio for target band`
+        description: `Execute internal swap (${amtLabel}, direction ${swapPlan.swapDirection}) to achieve optimal inventory ratio for target band`
       });
     } else {
       steps.push({
