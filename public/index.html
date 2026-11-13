@@ -840,14 +840,14 @@
           </p>
 
           <div class="controls">
-            <button class="btn btn-outline" onclick="triggerSimulation('normal')">
-              🟢 Live Spot Market (<span id="btnSpot">$0.8950</span>)
+            <button id="btnSimNormal" class="btn btn-outline" onclick="triggerSimulation('normal')">
+              🟢 Reset to Live Spot (<span id="btnSpot">$0.8070</span>)
             </button>
-            <button class="btn btn-outline" onclick="triggerSimulation('hedge')">
-              📉 Price Drop ($0.83 - Test Dynamic Hedge)
+            <button id="btnSimHedge" class="btn btn-outline" onclick="triggerSimulation('hedge')">
+              📉 Moderate Drop (-6% · Test Dynamic Hedge)
             </button>
-            <button class="btn btn-outline" onclick="triggerSimulation('drift')">
-              🚨 Severe Drift ($0.78 - Test Atomic Rebalance PTB)
+            <button id="btnSimDrift" class="btn btn-outline" onclick="triggerSimulation('drift')">
+              🚨 Severe Drift (-15% · Test Atomic Rebalance PTB)
             </button>
           </div>
         </div>
@@ -1187,8 +1187,23 @@
       }
 
       if (document.getElementById('btnSpot')) {
-        document.getElementById('btnSpot').textContent = '$' + currentSpotPrice.toFixed(4);
+        const realLive = data.liveMarketPrice || currentSpotPrice;
+        document.getElementById('btnSpot').textContent = '$' + realLive.toFixed(4);
       }
+
+      // Highlight active scenario button
+      const scenarioBtnMap = {
+        normal: 'btnSimNormal',
+        hedge: 'btnSimHedge',
+        drift: 'btnSimDrift'
+      };
+      Object.entries(scenarioBtnMap).forEach(([scen, btnId]) => {
+        const el = document.getElementById(btnId);
+        if (!el) return;
+        const isActive = (data.scenario || 'normal') === scen;
+        el.style.borderColor = isActive ? 'var(--cyan)' : '';
+        el.style.background = isActive ? 'rgba(0, 242, 254, 0.14)' : '';
+      });
       if (document.getElementById('oldBandText')) {
         document.getElementById('oldBandText').textContent = '$' + data.clmm.lowerPrice.toFixed(4) + ' <──> $' + data.clmm.upperPrice.toFixed(4);
       }

@@ -74,6 +74,7 @@ async function getLiveState(userAddress = null) {
 
   return {
     scenario: currentScenario,
+    liveMarketPrice: livePrice,
     currentPrice: simPrice,
     clmm: {
       dex: 'Cetus Protocol',
