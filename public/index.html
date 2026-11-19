@@ -655,6 +655,66 @@
       from { opacity: 0; transform: translateY(-4px); }
       to { opacity: 1; transform: translateY(0); }
     }
+
+    /* Vault Selector Bar */
+    .vault-selector-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .vault-card {
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      text-align: left;
+      width: 100%;
+    }
+
+    .vault-card:hover {
+      border-color: rgba(56, 189, 248, 0.45);
+      transform: translateY(-1px);
+      background: rgba(30, 41, 59, 0.85);
+    }
+
+    .vault-card.active {
+      border-color: var(--cyan);
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.12), rgba(56, 189, 248, 0.05));
+      box-shadow: 0 0 22px rgba(0, 242, 254, 0.15);
+    }
+
+    .vault-card.loading {
+      border-color: #fbbf24;
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(56, 189, 248, 0.05));
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .spin-inline {
+      display: inline-block;
+      animation: spin 0.9s linear infinite;
+    }
+
+    .vault-loading-pill {
+      display: none;
+      font-size: 11px;
+      background: rgba(251, 191, 36, 0.16);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      color: #fbbf24;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -670,7 +730,7 @@
       </div>
       <div class="header-actions">
         <div class="badge badge-network" id="networkBadge">● Sui Mainnet</div>
-        <div class="badge badge-sim">⚙️ DRY_RUN Simulation</div>
+        <div class="badge badge-sim" id="execModeBadge">⏳ Loading Mode...</div>
         <!-- Wallet Connect / Status Button -->
         <button id="walletBtn" class="wallet-btn" onclick="openWalletModal()">
           <span>👛 Connect Sui Wallet</span>
@@ -678,18 +738,22 @@
       </div>
     </header>
 
-    <!-- Testnet Live Deployment Details Banner -->
-    <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px;">
+    <!-- Vault Selector Bar -->
+    <div id="vaultSelectorBar" class="vault-selector-bar"></div>
+
+    <!-- Live Deployment & Monitor Status Banner -->
+    <div id="deploymentBanner" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px;">
       <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 20px;">💧</span>
+        <span style="font-size: 20px;" id="bannerIcon">🌊</span>
         <div>
-          <div style="font-weight: 600; color: #38bdf8;">Sui Testnet Live Move Deployment</div>
-          <div style="color: var(--text-muted); font-size: 12px;">Package: <a href="https://testnet.suivision.xyz/package/0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844" target="_blank" style="color: var(--cyan); text-decoration: underline; font-family: monospace;">0x9012c6d5...3844 ↗</a> · Shared Vault: <a href="https://testnet.suivision.xyz/object/0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc" target="_blank" style="color: var(--cyan); text-decoration: underline; font-family: monospace;">0x630639ff...08dc ↗</a></div>
+          <div style="font-weight: 600; color: #38bdf8;" id="bannerTitle">BluSky-Sui Live Move Deployment</div>
+          <div style="color: var(--text-muted); font-size: 12px;" id="bannerLinks">Connecting to Sui RPC...</div>
         </div>
       </div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <span style="font-size: 11px; background: rgba(255, 255, 255, 0.08); padding: 4px 8px; border-radius: 6px; color: var(--text-muted);">Protocol Treasury: <strong style="color: #e2e8f0; font-family: monospace;">0xa81ad...6db</strong> (10% Fee)</span>
-        <a href="https://testnet.suivision.xyz/account/0xc89ce5dfb92494b66bef0305b062d3fd84dcd4a247deccd5154f12a30f553ce4" target="_blank" style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 4px 10px; border-radius: 6px; text-decoration: none; font-weight: 500;">Wallet Explorer ↗</a>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;" id="bannerRight">
+        <span id="vaultLoadingPill" class="vault-loading-pill"><span class="spin-inline">⟳</span> Switching vault...</span>
+        <span id="monitorStatusPill" style="font-size: 11px; background: rgba(255, 255, 255, 0.08); padding: 4px 8px; border-radius: 6px; color: var(--text-muted);">Monitor: Checking...</span>
+        <span style="font-size: 11px; background: rgba(255, 255, 255, 0.08); padding: 4px 8px; border-radius: 6px; color: var(--text-muted);">Treasury: <strong id="treasuryAddrDisplay" style="color: #e2e8f0; font-family: monospace;">0xa81ad...f6db</strong> (10%)</span>
       </div>
     </div>
 
@@ -697,23 +761,23 @@
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-label">Total Vault TVL <span style="color: var(--green);">● Active</span></div>
-        <div class="stat-value" id="valTvl">$20,000.00</div>
-        <div class="stat-sub">SUI / Circle USDC Pair</div>
+        <div class="stat-value" id="valTvl">$0.00</div>
+        <div class="stat-sub" id="valTvlSub">SUI / Circle USDC Pair</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Net Investor APY <span style="background: rgba(0, 242, 254, 0.12); color: var(--cyan); padding: 2px 6px; border-radius: 4px; font-size: 10px;">⚡ Dynamic Trailing</span></div>
-        <div class="stat-value" style="color: var(--cyan);" id="valNetApy">107.6%</div>
-        <div class="stat-sub" id="valApySub">104.2% Fees + 10.0% Funding - 10% Fee</div>
+        <div class="stat-value" style="color: var(--cyan);" id="valNetApy">0.0%</div>
+        <div class="stat-sub" id="valApySub">Loading APY breakdown...</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">VaultShare Price <span>On-Chain</span></div>
+        <div class="stat-label">VaultShare NAV <span id="lblShareUnit">On-Chain</span></div>
         <div class="stat-value" id="valSharePrice">$1.0000</div>
-        <div class="stat-sub" id="valTotalShares">20,000 Shares Outstanding</div>
+        <div class="stat-sub" id="valTotalShares">0 Shares Outstanding</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Vault 24h Yield <span style="background: rgba(16, 185, 129, 0.12); color: var(--green); padding: 2px 6px; border-radius: 4px; font-size: 10px;">Gross</span></div>
-        <div class="stat-value" style="color: var(--green);" id="valGrossYield">$55.20</div>
-        <div class="stat-sub" id="valYieldSub">$49.68 to investors · $5.52 protocol fee</div>
+        <div class="stat-value" style="color: var(--green);" id="valGrossYield">$0.00</div>
+        <div class="stat-sub" id="valYieldSub">Loading yield economics...</div>
       </div>
     </div>
 
@@ -725,9 +789,12 @@
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">🎯 Cetus Protocol CLMM Active Range Monitor</div>
+              <div class="panel-title" id="clmmPanelTitle">🎯 Active CLMM Range Monitor</div>
               <div style="font-size: 11px; color: var(--cyan); margin-top: 3px;">
                 🔄 Smart Yield Router: Cetus Gross APR <span id="valCetusApr">250%</span> | Turbos <span id="valTurbosApr">180%</span> (Spread: <span id="valSpreadPct">+70%</span>)
+              </div>
+              <div id="valPositionMeta" style="font-size: 11px; color: var(--text-muted); margin-top: 3px; font-family: 'JetBrains Mono', monospace;">
+                Position NFT: Loading...
               </div>
             </div>
             <div class="badge" id="clmmBadge" style="background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3);">
@@ -794,7 +861,7 @@
             </div>
           </div>
 
-          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+          <p id="hedgeDescription" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
             Shorting 1x SUI on Bluefin Perps dynamically offsets spot SUI pool holdings, delivering pure fee yields with zero market beta.
           </p>
 
@@ -815,9 +882,9 @@
               <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valNetDeltaUsd">$-0.07 USD (&Delta; drift: 0.02%)</div>
             </div>
             <div class="hedge-tile">
-              <div class="hedge-tile-title">8h Perp Funding Yield</div>
+              <div class="hedge-tile-title">Perp Funding Yield (8h Avg)</div>
               <div class="hedge-tile-val" id="valFundingRate" style="color: var(--green);">+10.0% APR</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Earned by Shorts from Longs</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="valFundingSub">1h Settled · Paid/Earned by Shorts</div>
             </div>
           </div>
 
@@ -934,16 +1001,16 @@
             <div class="form-group">
               <label class="form-label">
                 <span>Deposit Amount (USDC)</span>
-                <span style="color: var(--cyan); font-size: 11px;">Available: $10,000 USDC</span>
+                <span id="depositAvailLabel" style="color: var(--cyan); font-size: 11px;">Single-Sided USDC Zap</span>
               </label>
-              <input type="number" class="calc-input" id="depositInput" value="1000" min="10" step="100" oninput="updateDepositPreview()">
+              <input type="number" class="calc-input" id="depositInput" value="1" min="0.01" step="any" oninput="updateDepositPreview()">
               
               <div class="chip-group">
-                <button class="chip-btn" onclick="setDepositAmount(500)">+$500</button>
-                <button class="chip-btn" onclick="setDepositAmount(1000)">+$1,000</button>
-                <button class="chip-btn" onclick="setDepositAmount(2500)">+$2,500</button>
-                <button class="chip-btn" onclick="setDepositAmount(5000)">+$5,000</button>
-                <button class="chip-btn" onclick="setDepositAmount(10000)">MAX</button>
+                <button class="chip-btn" onclick="setDepositAmount(1)">$1</button>
+                <button class="chip-btn" onclick="setDepositAmount(5)">$5</button>
+                <button class="chip-btn" onclick="setDepositAmount(25)">$25</button>
+                <button class="chip-btn" onclick="setDepositAmount(100)">$100</button>
+                <button class="chip-btn" onclick="setDepositAmount(500)">$500</button>
               </div>
             </div>
 
@@ -970,7 +1037,7 @@
               </div>
               <div class="calc-row">
                 <span style="color: var(--text-muted);">Capital Deployment:</span>
-                <span style="font-size: 11px; color: var(--text-muted);">50% LP Pool + 50% Bluefin Hedge</span>
+                <span id="previewDeploymentSplit" style="font-size: 11px; color: var(--text-muted);">CLMM Zap (auto-balanced to active ticks)</span>
               </div>
             </div>
 
@@ -986,7 +1053,7 @@
                 <span>Shares to Burn & Redeem</span>
                 <span id="withdrawAvailLabel" style="color: var(--cyan); font-size: 11px;">Available: 5,000.00 Shares</span>
               </label>
-              <input type="number" class="calc-input" id="withdrawInput" value="1000" min="1" step="100" oninput="updateWithdrawPreview()">
+              <input type="number" class="calc-input" id="withdrawInput" value="0" min="0.01" step="any" oninput="updateWithdrawPreview()">
               
               <div class="chip-group">
                 <button class="chip-btn" onclick="setWithdrawPct(25)">25%</button>
@@ -1002,7 +1069,7 @@
                 <strong id="previewWithdrawUsd" style="color: #ffffff;">$1,000.00 USD</strong>
               </div>
               <div class="calc-row">
-                <span style="color: var(--text-muted);">Redemption Split (50/50):</span>
+                <span style="color: var(--text-muted);">Est. Redemption Split:</span>
                 <span id="previewWithdrawSplit" style="color: var(--green); font-size: 12px; font-weight: 600;">$500.00 USDC + 558.65 SUI</span>
               </div>
               <div class="calc-row">
@@ -1084,11 +1151,12 @@
       </button>
 
       <!-- Sui Wallet Standard Option -->
+      <div id="detectedWalletsContainer" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px;"></div>
       <button class="wallet-option" onclick="connectBrowserWallet()">
         <div class="wallet-icon" style="background: rgba(34, 197, 94, 0.2); color: var(--green);">💧</div>
         <div>
           <div style="font-weight: 700; font-size: 14px; color: #ffffff;">Sui Wallet / Browser Standard</div>
-          <div style="font-size: 12px; color: var(--text-muted);">Sui Wallet, Suiet, Nightly, Martian</div>
+          <div id="browserWalletHint" style="font-size: 12px; color: var(--text-muted);">Slush, Sui Wallet, Suiet, Nightly, Phantom</div>
         </div>
       </button>
 
@@ -1107,32 +1175,273 @@
 
   <script>
     // State
-    let currentWallet = null; // { address: '0x...', label: '...' }
+    let currentWallet = null; // { address, isDemo, walletName, canSign }
+    let selectedVaultKey = new URLSearchParams(window.location.search).get('vault') || localStorage.getItem('blusky_selected_vault') || '';
     let currentNetApyRate = 1.076;
     let currentSharePrice = 1.0000;
     let currentSpotPrice = 0.8950;
+    let currentExecutionMode = 'DRY_RUN';
+    let currentNetwork = 'mainnet';
+    let isLiveVault = false;
+    let currentVaultAllocation = null;
+    let currentClmmRange = null;
     let userShares = 0;
+
+    // Sui Wallet Standard discovery registry (full @wallet-standard/app spec)
+    const discoveredStandardWallets = [];
+    let activeStandardWallet = null; // { wallet, account }
+
+    function registerStandardWallets(...wallets) {
+      const added = [];
+      for (const w of wallets.flat()) {
+        if (!w || !w.name) continue;
+        const chains = Array.isArray(w.chains) ? w.chains : [];
+        const feats = w.features || {};
+        const isSui =
+          chains.some((c) => String(c).startsWith('sui:')) ||
+          Boolean(feats['sui:signTransaction'] || feats['sui:signTransactionBlock'] || feats['standard:connect']);
+        if (isSui && !discoveredStandardWallets.some((x) => x.name === w.name)) {
+          discoveredStandardWallets.push(w);
+          added.push(w);
+        }
+      }
+      renderDetectedWallets();
+      return () => {
+        for (const w of added) {
+          const i = discoveredStandardWallets.indexOf(w);
+          if (i >= 0) discoveredStandardWallets.splice(i, 1);
+        }
+        renderDetectedWallets();
+      };
+    }
+
+    const walletStandardApi = Object.freeze({ register: registerStandardWallets });
+
+    function initNavigatorWalletsBridge() {
+      try {
+        const existing = Array.isArray(window.navigator?.wallets) ? [...window.navigator.wallets] : [];
+        const push = (...callbacks) => {
+          for (const cb of callbacks) {
+            try {
+              if (typeof cb === 'function') cb(walletStandardApi);
+            } catch {}
+          }
+        };
+        if (window.navigator && !window.navigator.wallets?.__bluskyHooked) {
+          try {
+            const bridge = Object.freeze({
+              push,
+              __bluskyHooked: true,
+              [Symbol.iterator]: existing[Symbol.iterator].bind(existing)
+            });
+            Object.defineProperty(window.navigator, 'wallets', {
+              configurable: true,
+              value: bridge
+            });
+          } catch {}
+        }
+        push(...existing);
+      } catch {}
+    }
+
+    function queryStandardWallets() {
+      initNavigatorWalletsBridge();
+      try {
+        window.dispatchEvent(
+          new CustomEvent('wallet-standard:app-ready', {
+            detail: walletStandardApi
+          })
+        );
+      } catch {}
+    }
+
+    window.addEventListener('wallet-standard:register-wallet', (event) => {
+      if (typeof event.detail === 'function') {
+        try {
+          event.detail(walletStandardApi);
+        } catch {}
+      }
+    });
+    window.addEventListener('DOMContentLoaded', queryStandardWallets);
+    window.addEventListener('load', queryStandardWallets);
+    queryStandardWallets();
 
     // Load saved wallet if any
     const savedAddr = localStorage.getItem('blusky_wallet_address');
+    const savedMode = localStorage.getItem('blusky_wallet_mode') || '';
     if (savedAddr) {
-      currentWallet = { address: savedAddr };
+      currentWallet = {
+        address: savedAddr,
+        isDemo: savedMode === 'demo' || savedAddr.toLowerCase() === '0x7f4a29c18b6e4d51a92e34018dfcb41928df92b1'
+      };
     }
 
-    async function fetchStatus() {
+    setTimeout(async () => {
+      queryStandardWallets();
+      if (!currentWallet?.address || currentWallet.isDemo) return;
+      if (savedMode.startsWith('standard:')) {
+        const targetName = savedMode.slice('standard:'.length);
+        const w = discoveredStandardWallets.find((x) => x.name === targetName) || discoveredStandardWallets[0];
+        if (w) {
+          const matchedAcc = (w.accounts || []).find((a) => a.address.toLowerCase() === currentWallet.address.toLowerCase());
+          if (matchedAcc) {
+            activeStandardWallet = { wallet: w, account: matchedAcc };
+            currentWallet.walletName = w.name;
+            currentWallet.canSign = true;
+          } else if (w.features?.['standard:connect']) {
+            try {
+              const res = await w.features['standard:connect'].connect({ silent: true });
+              const acc = (res?.accounts || w.accounts || []).find((a) => a.address.toLowerCase() === currentWallet.address.toLowerCase());
+              if (acc) {
+                activeStandardWallet = { wallet: w, account: acc };
+                currentWallet.walletName = w.name;
+                currentWallet.canSign = true;
+              }
+            } catch {}
+          }
+        }
+      }
+    }, 250);
+
+    const clientVaultCache = new Map();
+    let lastAvailableVaults = [];
+    let loadingVaultKey = null;
+    let statusAbortController = null;
+    let statusFetchSeq = 0;
+    let didPrewarmVaults = false;
+
+    function setVaultLoadingState(vaultKeyOrNull) {
+      loadingVaultKey = vaultKeyOrNull;
+      const pill = document.getElementById('vaultLoadingPill');
+      if (pill) {
+        if (vaultKeyOrNull) {
+          const matched = lastAvailableVaults.find((v) => v.key === vaultKeyOrNull);
+          pill.innerHTML = `<span class="spin-inline">⟳</span> ${matched ? `Loading ${matched.shortLabel}...` : 'Switching vault...'}`;
+          pill.style.display = 'inline-flex';
+          pill.style.alignItems = 'center';
+          pill.style.gap = '6px';
+        } else {
+          pill.style.display = 'none';
+        }
+      }
+      if (lastAvailableVaults.length > 0) {
+        renderVaultSelector(lastAvailableVaults, selectedVaultKey);
+      }
+    }
+
+    function selectVault(vaultKey) {
+      if (!vaultKey || vaultKey === selectedVaultKey) return;
+      selectedVaultKey = vaultKey;
+      localStorage.setItem('blusky_selected_vault', vaultKey);
+      const wInput = document.getElementById('withdrawInput');
+      if (wInput) wInput.value = '0';
+
+      const cacheKey = `${vaultKey}:${(currentWallet?.address || '').toLowerCase()}`;
+      const cached = clientVaultCache.get(cacheKey);
+      if (cached) {
+        updateUI(cached);
+      }
+      setVaultLoadingState(vaultKey);
+      fetchStatus({ showLoading: true });
+    }
+
+    function renderVaultSelector(availableVaults, activeKey) {
+      const bar = document.getElementById('vaultSelectorBar');
+      if (!bar || !Array.isArray(availableVaults) || availableVaults.length === 0) return;
+      lastAvailableVaults = availableVaults;
+      bar.innerHTML = '';
+      availableVaults.forEach((v) => {
+        const isActive = v.key === activeKey;
+        const isLoading = v.key === loadingVaultKey;
+        const btn = document.createElement('button');
+        btn.className = `vault-card${isActive ? ' active' : ''}${isLoading ? ' loading' : ''}`;
+        btn.onclick = () => selectVault(v.key);
+        const icon = v.dex === 'turbos' ? '🌀' : '🌊';
+        const apyStr = v.netApy !== null && v.netApy !== undefined ? `${v.netApy}% APY` : 'Live';
+        const statusStr = isLoading
+          ? '<span style="color:#fbbf24;"><span class="spin-inline">⟳</span> Loading...</span>'
+          : (v.deployed ? (isActive ? '● Selected' : 'Live Vault') : 'Benchmark');
+        btn.innerHTML = `
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #ffffff;">${icon} ${v.shortLabel}</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${v.dexName} · ${statusStr}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 15px; font-weight: 800; color: ${isLoading ? '#fbbf24' : (isActive ? 'var(--cyan)' : 'var(--green)')}; font-family: 'JetBrains Mono', monospace;">${apyStr}</div>
+            <div style="font-size: 10px; color: var(--text-muted);">Net Investor</div>
+          </div>
+        `;
+        bar.appendChild(btn);
+      });
+    }
+
+    async function prewarmSiblingVaults(availableVaults, activeKey) {
+      if (didPrewarmVaults || !Array.isArray(availableVaults)) return;
+      didPrewarmVaults = true;
+      const siblings = availableVaults.filter((v) => v.deployed && v.key !== activeKey);
+      await Promise.all(siblings.map(async (v) => {
+        try {
+          const params = new URLSearchParams();
+          if (currentWallet?.address) params.set('address', currentWallet.address);
+          params.set('vault', v.key);
+          const res = await fetch(`/api/status?${params.toString()}`);
+          if (res.ok) {
+            const data = await res.json();
+            const cKey = `${v.key}:${(currentWallet?.address || '').toLowerCase()}`;
+            clientVaultCache.set(cKey, data);
+          }
+        } catch {}
+      }));
+    }
+
+    async function fetchStatus(opts = {}) {
+      const seq = ++statusFetchSeq;
+      if (statusAbortController) {
+        try { statusAbortController.abort(); } catch {}
+      }
+      statusAbortController = new AbortController();
+      const targetVault = selectedVaultKey;
+      if (opts.showLoading && targetVault) {
+        setVaultLoadingState(targetVault);
+      }
+
       try {
-        const url = currentWallet?.address ? `/api/status?address=${encodeURIComponent(currentWallet.address)}` : '/api/status';
-        const res = await fetch(url);
+        const params = new URLSearchParams();
+        if (currentWallet?.address) params.set('address', currentWallet.address);
+        if (targetVault) params.set('vault', targetVault);
+        const qs = params.toString();
+        const url = qs ? `/api/status?${qs}` : '/api/status';
+        const res = await fetch(url, { signal: statusAbortController.signal });
         const data = await res.json();
+        if (seq !== statusFetchSeq) return;
+        const cKey = `${data.vault?.vaultKey || targetVault}:${(currentWallet?.address || '').toLowerCase()}`;
+        if (data.vault?.vaultKey) clientVaultCache.set(cKey, data);
+        setVaultLoadingState(null);
         updateUI(data);
+        if (!didPrewarmVaults && data.vault?.availableVaults) {
+          setTimeout(() => prewarmSiblingVaults(data.vault.availableVaults, data.vault.vaultKey), 300);
+        }
       } catch (err) {
+        if (err?.name === 'AbortError') return;
+        if (seq === statusFetchSeq) setVaultLoadingState(null);
         console.error('Error fetching status:', err);
       }
     }
 
     function updateUI(data) {
+      if (data.vault?.vaultKey && !loadingVaultKey) {
+        selectedVaultKey = data.vault.vaultKey;
+        localStorage.setItem('blusky_selected_vault', selectedVaultKey);
+      }
+      renderVaultSelector(data.vault?.availableVaults, selectedVaultKey);
+
       currentSpotPrice = data.currentPrice || 0.895;
       currentSharePrice = data.vault.sharePriceUsd || 1.0;
+      currentExecutionMode = data.executionMode || 'DRY_RUN';
+      currentNetwork = data.network || 'mainnet';
+      isLiveVault = Boolean(data.vault?.isLiveVault);
+      currentVaultAllocation = data.vaultAllocation || null;
+      currentClmmRange = data.clmm ? { lowerTick: data.clmm.lowerTick, upperTick: data.clmm.upperTick } : null;
       
       if (document.getElementById('networkBadge') && data.network) {
         const isTestnet = data.network === 'testnet';
@@ -1141,25 +1450,103 @@
         document.getElementById('networkBadge').style.color = isTestnet ? '#38bdf8' : '#34d399';
       }
 
+      if (document.getElementById('execModeBadge')) {
+        const isLive = data.executionMode === 'LIVE';
+        const badge = document.getElementById('execModeBadge');
+        badge.textContent = isLive ? '⚡ LIVE Mainnet Execution' : '⚙️ DRY_RUN Simulation';
+        badge.style.background = isLive ? 'rgba(16, 185, 129, 0.16)' : '';
+        badge.style.color = isLive ? '#34d399' : '';
+        badge.style.borderColor = isLive ? 'rgba(16, 185, 129, 0.35)' : '';
+      }
+
+      if (document.getElementById('bannerLinks') && data.vault) {
+        const isTestnet = data.network === 'testnet';
+        const explorerBase = isTestnet ? 'https://testnet.suivision.xyz' : 'https://suivision.xyz';
+        const shortId = (id) => id && id.length > 14 ? `${id.slice(0, 10)}...${id.slice(-4)}` : (id || 'N/A');
+        document.getElementById('bannerTitle').textContent = data.vault.isLiveVault
+          ? `${data.vault.vaultName} · Custody Active`
+          : `${data.vault.vaultName} (Preview)`;
+        const pkgId = data.vault.packageId;
+        const vId = data.vault.vaultId;
+        const nftId = data.clmm?.positionNftId;
+        document.getElementById('bannerLinks').innerHTML =
+          `Package: <a href="${explorerBase}/package/${pkgId}" target="_blank" style="color: var(--cyan); text-decoration: underline; font-family: monospace;">${shortId(pkgId)} ↗</a>` +
+          ` · Vault: <a href="${explorerBase}/object/${vId}" target="_blank" style="color: var(--cyan); text-decoration: underline; font-family: monospace;">${shortId(vId)} ↗</a>` +
+          (nftId && nftId.startsWith('0x') && nftId.length > 30
+            ? ` · Active NFT: <a href="${explorerBase}/object/${nftId}" target="_blank" style="color: #34d399; text-decoration: underline; font-family: monospace;">${shortId(nftId)} ↗</a>`
+            : '');
+      }
+
+      if (document.getElementById('monitorStatusPill')) {
+        const mPill = document.getElementById('monitorStatusPill');
+        const m = data.monitor;
+        if (m && m.isActive) {
+          mPill.style.background = 'rgba(16, 185, 129, 0.16)';
+          mPill.style.color = '#34d399';
+          mPill.textContent = `● Monitor LIVE · Cycle #${m.cycle} (${m.actionTaken}, ${m.ageSec}s ago)`;
+        } else if (m) {
+          mPill.style.background = 'rgba(245, 158, 11, 0.16)';
+          mPill.style.color = '#fbbf24';
+          mPill.textContent = `⏸ Monitor Idle (Last: Cycle #${m.cycle}, ${m.ageSec}s ago)`;
+        } else {
+          mPill.style.background = 'rgba(255, 255, 255, 0.08)';
+          mPill.style.color = 'var(--text-muted)';
+          mPill.textContent = '⏸ Monitor Daemon Offline';
+        }
+      }
+
       if (data.vault?.apy?.netInvestorApy) {
         currentNetApyRate = parseFloat(data.vault.apy.netInvestorApy) / 100;
       }
 
       // Top Metrics
       document.getElementById('valTvl').textContent = '$' + data.vault.tvlUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (document.getElementById('valTvlSub')) {
+        if (data.vault.balances) {
+          const b = data.vault.balances;
+          document.getElementById('valTvlSub').textContent = `${b.totalUsdc.toFixed(4)} USDC + ${b.totalSui.toFixed(4)} SUI`;
+        } else {
+          document.getElementById('valTvlSub').textContent = 'SUI / Circle USDC Pair';
+        }
+      }
       document.getElementById('valNetApy').textContent = data.vault.apy.netInvestorApy;
       document.getElementById('valSharePrice').textContent = '$' + currentSharePrice.toFixed(4);
+      if (document.getElementById('lblShareUnit') && data.vault.sharePriceUnit) {
+        document.getElementById('lblShareUnit').textContent = data.vault.sharePriceUnit;
+      }
       if (document.getElementById('valTotalShares')) {
         document.getElementById('valTotalShares').textContent = `${data.vault.totalShares.toLocaleString()} Shares Outstanding`;
       }
       if (document.getElementById('valGrossYield')) {
-        document.getElementById('valGrossYield').textContent = '$' + data.vault.economics.dailyGrossYieldUsd.toFixed(2);
+        const gy = data.vault.economics.dailyGrossYieldUsd;
+        document.getElementById('valGrossYield').textContent = '$' + (gy < 1 ? gy.toFixed(4) : gy.toFixed(2));
       }
       if (document.getElementById('valYieldSub')) {
-        document.getElementById('valYieldSub').textContent = `$${data.vault.economics.dailyNetYieldUsd.toFixed(2)} to investors · $${data.vault.economics.dailyProtocolFeeEarnedUsd.toFixed(2)} protocol fee`;
+        const ny = data.vault.economics.dailyNetYieldUsd;
+        const pf = data.vault.economics.dailyProtocolFeeEarnedUsd;
+        const dec = ny < 1 ? 4 : 2;
+        document.getElementById('valYieldSub').textContent = `$${ny.toFixed(dec)} to investors · $${pf.toFixed(dec)} protocol fee`;
       }
       if (document.getElementById('valApySub')) {
-        document.getElementById('valApySub').textContent = `${data.vault.apy.grossTradingApr} Fees + ${data.vault.apy.bluefinFundingApr} Funding - 10% Fee`;
+        const rewPart = parseFloat(data.vault.apy.rewardApr || 0) > 0
+          ? `${data.vault.apy.feeApr} Fees + ${data.vault.apy.rewardApr} Rewards`
+          : `${data.vault.apy.grossTradingApr} CLMM Fees`;
+        document.getElementById('valApySub').textContent = data.hedging?.enabled === false
+          ? `${rewPart} · Hedging OFF · -10% Fee`
+          : `${rewPart} + ${data.vault.apy.bluefinFundingApr} Funding - 10% Fee`;
+      }
+      if (document.getElementById('clmmPanelTitle') && data.clmm) {
+        const icon = data.vault?.dex === 'turbos' ? '🌀' : '🎯';
+        document.getElementById('clmmPanelTitle').textContent = `${icon} ${data.clmm.dex} (${data.clmm.feeTier || data.vault?.feeTier || ''}) Active Range Monitor`;
+      }
+      if (document.getElementById('lblPoolVol') && data.vault?.dexName) {
+        document.getElementById('lblPoolVol').textContent = `${data.vault.dexName.split(' ')[0]} 24h Vol:`;
+      }
+      if (document.getElementById('valPositionMeta') && data.clmm) {
+        const nft = data.clmm.positionNftId || 'Simulated';
+        const shortNft = nft.length > 18 ? `${nft.slice(0, 10)}...${nft.slice(-6)}` : nft;
+        document.getElementById('valPositionMeta').textContent =
+          `NFT: ${shortNft} · Ticks [${data.clmm.lowerTick}, ${data.clmm.upperTick}] · Rebalance Lock: ${Boolean(data.clmm.isRebalancing)}`;
       }
       if (data.vault?.economics?.feeTreasuryAddress && document.getElementById('treasuryAddrDisplay')) {
         const tAddr = data.vault.economics.feeTreasuryAddress;
@@ -1217,9 +1604,13 @@
       document.getElementById('valUpperPrice').textContent = '$' + data.clmm.upperPrice.toFixed(4);
       document.getElementById('valProgressPct').textContent = data.clmm.progressPct.toFixed(1) + '%';
       document.getElementById('valBoundaryDist').textContent = data.clmm.nearestBoundaryPct.toFixed(1) + '%';
-      document.getElementById('valFees').textContent = '$' + data.clmm.accruedFeesUsd.toFixed(2) + ' USD';
+      const feeUsd = data.clmm.accruedFeesUsd || 0;
+      document.getElementById('valFees').textContent = '$' + (feeUsd > 0 && feeUsd < 0.01 ? feeUsd.toFixed(4) : feeUsd.toFixed(2)) + ' USD';
       if (document.getElementById('valFeesBreakdown')) {
-        document.getElementById('valFeesBreakdown').textContent = `(${data.clmm.accruedFeesSui.toFixed(1)} SUI + ${data.clmm.accruedFeesUsdc.toFixed(1)} USDC)`;
+        const fSui = data.clmm.accruedFeesSui || 0;
+        const fUsdc = data.clmm.accruedFeesUsdc || 0;
+        const fmt = (n) => (n > 0 && n < 0.1) ? n.toFixed(4) : n.toFixed(2);
+        document.getElementById('valFeesBreakdown').textContent = `(${fmt(fSui)} SUI + ${fmt(fUsdc)} USDC)`;
       }
       
       const fill = document.getElementById('rangeFill');
@@ -1248,28 +1639,80 @@
       }
 
       // Hedging Metrics
+      const isHedgingOn = data.hedging?.enabled !== false;
       document.getElementById('valSpotDelta').textContent = '+' + data.hedging.spotDeltaSui.toFixed(2) + ' SUI';
       document.getElementById('valSpotDeltaUsd').textContent = '$' + data.hedging.spotDeltaUsd.toFixed(2) + ' USD';
-      document.getElementById('valPerpShort').textContent = '-' + data.hedging.perpShortSizeSui.toFixed(2) + ' SUI';
-      document.getElementById('valPerpShortUsd').textContent = '$' + data.hedging.perpShortNotionalUsd.toFixed(2) + ' USD';
+      document.getElementById('valPerpShort').textContent = isHedgingOn ? '-' + data.hedging.perpShortSizeSui.toFixed(2) + ' SUI' : '0.00 SUI';
+      document.getElementById('valPerpShortUsd').textContent = isHedgingOn ? '$' + data.hedging.perpShortNotionalUsd.toFixed(2) + ' USD' : '$0.00 (OFF)';
       document.getElementById('valNetDelta').textContent = (data.hedging.netDeltaSui >= 0 ? '+' : '') + data.hedging.netDeltaSui.toFixed(2) + ' SUI';
       document.getElementById('valNetDeltaUsd').textContent = (data.hedging.netDeltaUsd >= 0 ? '+' : '') + '$' + data.hedging.netDeltaUsd.toFixed(2) + ' USD (Δ drift: ' + data.hedging.deltaDriftPct.toFixed(2) + '%)';
 
+      if (document.getElementById('valFundingRate')) {
+        const fApr = Number(data.hedging.annualizedFundingApr || 0);
+        const fEl = document.getElementById('valFundingRate');
+        fEl.textContent = isHedgingOn
+          ? `${fApr >= 0 ? '+' : ''}${fApr.toFixed(1)}% APR`
+          : 'DISABLED';
+        fEl.style.color = !isHedgingOn ? 'var(--text-muted)' : (fApr >= 0 ? 'var(--green)' : 'var(--amber)');
+        const fSub = document.getElementById('valFundingSub');
+        if (fSub) {
+          fSub.textContent = !isHedgingOn
+            ? 'Hedging Disabled'
+            : (fApr >= 0 ? '1h Settled · Earned by Shorts from Longs' : '1h Settled · Paid by Shorts to Longs');
+        }
+      }
+      if (document.getElementById('hedgeDescription')) {
+        document.getElementById('hedgeDescription').textContent = isHedgingOn
+          ? 'Shorting 1x SUI on Bluefin Perps dynamically offsets spot SUI pool holdings, delivering pure fee yields with zero market beta.'
+          : 'Bluefin Perps hedging is turned OFF (HEDGING_ENABLED=false) for CLMM-only Mainnet validation.';
+      }
+
       const hedgeBadge = document.getElementById('hedgeBadge');
       const hedgeNotice = document.getElementById('hedgeNotice');
-      if (data.hedging.adjustmentResult) {
+      if (!isHedgingOn) {
+        hedgeBadge.style.background = 'rgba(148, 163, 184, 0.16)';
+        hedgeBadge.style.color = '#94a3b8';
+        hedgeBadge.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+        hedgeBadge.textContent = '⏸️ CLMM-ONLY (Hedging Off)';
+        hedgeNotice.style.display = 'none';
+      } else if (data.hedging.adjustmentResult) {
         hedgeBadge.style.background = 'rgba(56, 189, 248, 0.2)';
+        hedgeBadge.style.color = '#22d3ee';
         hedgeBadge.textContent = '⚡ RE-HEDGED';
         hedgeNotice.style.display = 'block';
         document.getElementById('hedgeNoticeText').textContent = data.hedging.adjustmentResult.description;
       } else {
         hedgeBadge.style.background = 'rgba(34, 211, 238, 0.15)';
+        hedgeBadge.style.color = '#22d3ee';
         hedgeBadge.textContent = '✅ STRICTLY DELTA-NEUTRAL';
         hedgeNotice.style.display = 'none';
       }
 
       // User Position & Portfolio UI
       updatePortfolioUI(data.userPosition);
+
+      // Update Deposit Deployment Split & Label
+      const depSplitEl = document.getElementById('previewDeploymentSplit');
+      if (depSplitEl) {
+        if (data.vaultAllocation) {
+          const uPct = data.vaultAllocation.usdcPct;
+          const sPct = data.vaultAllocation.suiPct;
+          const tickNote = data.clmm ? ` [${data.clmm.lowerTick}, ${data.clmm.upperTick}]` : '';
+          depSplitEl.textContent = data.hedgingEnabled
+            ? `~${uPct}% USDC / ~${sPct}% SUI LP + Perp Hedge`
+            : `Auto-zap ~${sPct}% USDC→SUI to match${tickNote} (${uPct}% USDC / ${sPct}% SUI)`;
+        } else {
+          depSplitEl.textContent = data.hedgingEnabled
+            ? '50% LP Pool + 50% Bluefin Hedge'
+            : 'CLMM Zap (auto-balanced to active ticks)';
+        }
+      }
+      const depAvailEl = document.getElementById('depositAvailLabel');
+      if (depAvailEl) {
+        depAvailEl.textContent = isLiveVault && currentExecutionMode === 'LIVE'
+          ? 'Live Mainnet USDC Zap'
+          : 'Single-Sided USDC Deposit';
+      }
 
       // Audit Events Feed
       if (data.vault.recentEvents) {
@@ -1315,20 +1758,20 @@
       if (pos && pos.hasPosition) {
         userShares = pos.shares;
         document.getElementById('portValuation').textContent = '$' + pos.currentValuationUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        document.getElementById('portShares').textContent = pos.shares.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        document.getElementById('portShares').textContent = pos.shares.toLocaleString(undefined, { maximumFractionDigits: isLiveVault ? 0 : 2 });
         document.getElementById('portPoolShare').textContent = `${pos.shareOfPoolPct.toFixed(1)}% of Vault`;
         document.getElementById('portInitial').textContent = '$' + pos.initialDepositUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('portYield').textContent = '+$' + pos.accruedYieldUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       } else {
         userShares = 0;
         document.getElementById('portValuation').textContent = '$0.00';
-        document.getElementById('portShares').textContent = '0.00';
+        document.getElementById('portShares').textContent = '0';
         document.getElementById('portPoolShare').textContent = '0.0% of Vault';
         document.getElementById('portInitial').textContent = '$0.00';
         document.getElementById('portYield').textContent = '+$0.00';
       }
 
-      document.getElementById('withdrawAvailLabel').textContent = `Available: ${userShares.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Shares`;
+      document.getElementById('withdrawAvailLabel').textContent = `Available: ${userShares.toLocaleString(undefined, { maximumFractionDigits: isLiveVault ? 0 : 2 })} Shares`;
     }
 
     function renderEventFeed(events) {
@@ -1353,14 +1796,21 @@
         }
 
         let bodyHtml = '';
+        const explorerBase = currentNetwork === 'testnet' ? 'https://testnet.suivision.xyz' : 'https://suivision.xyz';
+        const txHash = evt.digest || evt.txDigest;
+        const txLink = txHash ? ` (<a href="${explorerBase}/txblock/${txHash}" target="_blank" style="color: var(--cyan); text-decoration: underline;">${txHash.slice(0, 8)}... ↗</a>)` : '';
         if (evt.type === 'DEPOSIT') {
-          bodyHtml = `${evt.user || 'Investor'} deposited <strong>$${(evt.amountUsd || 0).toLocaleString()} USDC</strong> -> Minted ${(evt.sharesMinted || 0).toLocaleString()} VaultShare`;
+          bodyHtml = `${evt.user || 'Investor'} deposited <strong>$${(evt.amountUsd || 0).toLocaleString()} USDC</strong> -> Minted ${(Number(evt.sharesMinted) || 0).toLocaleString()} VaultShare${txLink}`;
         } else if (evt.type === 'WITHDRAW') {
-          bodyHtml = `${evt.user || 'Investor'} redeemed <strong>${(evt.sharesBurned || 0).toLocaleString()} VaultShare</strong> -> Received $${(evt.amountUsd || 0).toLocaleString()} USD`;
+          const usdNote = evt.amountUsd ? ` -> Received $${(evt.amountUsd || 0).toLocaleString()} USD` : '';
+          bodyHtml = `${evt.user || 'Investor'} redeemed <strong>${(Number(evt.sharesBurned) || 0).toLocaleString()} VaultShare</strong>${usdNote}${txLink}`;
         } else if (evt.type === 'COMPOUND') {
           bodyHtml = `Harvested <strong>$${(evt.grossFeesUsd || 0).toFixed(2)}</strong> -> Treasury: $${(evt.performanceFeeCollectedUsd || 0).toFixed(2)} | Auto-Compounded: $${(evt.compoundedUsd || 0).toFixed(2)}`;
         } else if (evt.type === 'REBALANCE') {
-          bodyHtml = `Atomic PTB recentered band: ${evt.oldRange} -> ${evt.newRange}`;
+          bodyHtml = `Atomic PTB recentered band: ${evt.oldRange} -> ${evt.newRange}${txLink}`;
+        } else if (evt.type === 'VAULT_LIVE') {
+          const shortNft = evt.positionNftId ? `${evt.positionNftId.slice(0, 8)}...${evt.positionNftId.slice(-4)}` : 'None';
+          bodyHtml = `Mainnet Vault custodying NFT <strong>${shortNft}</strong> · Ticks [${evt.lowerTick}, ${evt.upperTick}] · ${(evt.totalUsdc || 0).toFixed(4)} USDC + ${(evt.totalSui || 0).toFixed(4)} SUI ($${(evt.tvlUsd || 0).toFixed(2)})`;
         }
 
         item.innerHTML = `
@@ -1402,16 +1852,90 @@
     function updateDepositPreview() {
       const amount = parseFloat(document.getElementById('depositInput').value || 0);
       const sharePrice = currentSharePrice || 1.0;
-      const sharesToReceive = amount / sharePrice;
+      const sharesToReceive = isLiveVault
+        ? Math.floor((amount / sharePrice) * 1e6)
+        : (amount / sharePrice);
       const apy = currentNetApyRate;
       const annual = amount * apy;
       const monthly = annual / 12;
 
-      document.getElementById('previewDepositShares').textContent = sharesToReceive.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Shares';
-      document.getElementById('previewSharePrice').textContent = '$' + sharePrice.toFixed(4);
+      document.getElementById('previewDepositShares').textContent = sharesToReceive.toLocaleString(undefined, { maximumFractionDigits: isLiveVault ? 0 : 2 }) + ' Shares';
+      document.getElementById('previewSharePrice').textContent = '$' + sharePrice.toFixed(4) + (isLiveVault ? ' / 1M' : '');
       document.getElementById('previewDepositApy').textContent = (apy * 100).toFixed(1) + '%';
       document.getElementById('previewMonthly').textContent = '$' + monthly.toFixed(2) + ' / mo';
       document.getElementById('previewAnnual').textContent = '$' + annual.toFixed(2) + ' / yr';
+    }
+
+    async function resolveSigningWalletForCurrentAddress() {
+      queryStandardWallets();
+      if (activeStandardWallet && activeStandardWallet.account?.address?.toLowerCase() === currentWallet.address.toLowerCase()) {
+        return activeStandardWallet;
+      }
+      const modeStr = localStorage.getItem('blusky_wallet_mode') || '';
+      const preferredName = modeStr.startsWith('standard:') ? modeStr.slice('standard:'.length) : '';
+      const ordered = [...discoveredStandardWallets].sort((a, b) => {
+        if (preferredName && a.name === preferredName) return -1;
+        if (preferredName && b.name === preferredName) return 1;
+        return 0;
+      });
+      for (const w of ordered) {
+        let accounts = w.accounts || [];
+        if (accounts.length === 0 && w.features?.['standard:connect']) {
+          try {
+            const res = await w.features['standard:connect'].connect({ silent: true });
+            accounts = res?.accounts || w.accounts || [];
+          } catch {}
+        }
+        if (accounts.length === 0 && w.features?.['standard:connect']) {
+          try {
+            const res = await w.features['standard:connect'].connect();
+            accounts = res?.accounts || w.accounts || [];
+          } catch {}
+        }
+        const match = accounts.find((a) => a.address.toLowerCase() === currentWallet.address.toLowerCase());
+        if (match && (w.features?.['sui:signTransaction'] || w.features?.['sui:signTransactionBlock'])) {
+          activeStandardWallet = { wallet: w, account: match };
+          return activeStandardWallet;
+        }
+      }
+      const legacy = currentWallet.legacyProvider || getLegacySuiProvider();
+      if (legacy && (legacy.signTransaction || legacy.signTransactionBlock)) {
+        return { legacyProvider: legacy, wallet: { name: 'Browser Wallet' } };
+      }
+      return null;
+    }
+
+    async function signPreparedTxWithWallet(signingCtx, txJson) {
+      if (signingCtx.legacyProvider) {
+        const p = signingCtx.legacyProvider;
+        const txWrapper = { toJSON: async () => txJson };
+        if (p.signTransaction) {
+          const res = await p.signTransaction({ transaction: txWrapper, chain: `sui:${currentNetwork || 'mainnet'}` });
+          return { bytes: res.bytes, signature: res.signature };
+        }
+        const res = await p.signTransactionBlock({ transactionBlock: txWrapper, chain: `sui:${currentNetwork || 'mainnet'}` });
+        return { bytes: res.transactionBlockBytes || res.bytes, signature: res.signature };
+      }
+      const { wallet, account } = signingCtx;
+      const chainId = `sui:${currentNetwork || 'mainnet'}`;
+      const txWrapper = { toJSON: async () => txJson };
+      if (wallet.features?.['sui:signTransaction']) {
+        const res = await wallet.features['sui:signTransaction'].signTransaction({
+          account,
+          chain: chainId,
+          transaction: txWrapper
+        });
+        return { bytes: res.bytes, signature: res.signature };
+      }
+      if (wallet.features?.['sui:signTransactionBlock']) {
+        const res = await wallet.features['sui:signTransactionBlock'].signTransactionBlock({
+          account,
+          chain: chainId,
+          transactionBlock: txWrapper
+        });
+        return { bytes: res.transactionBlockBytes || res.bytes, signature: res.signature };
+      }
+      throw new Error(`${wallet.name} does not expose sui:signTransaction`);
     }
 
     async function executeDepositAction() {
@@ -1425,6 +1949,63 @@
         return;
       }
 
+      if (currentExecutionMode === 'LIVE' && !currentWallet.isDemo) {
+        const signingCtx = await resolveSigningWalletForCurrentAddress();
+        if (!signingCtx) {
+          showNotice('error', 'Connect a signing browser wallet (Slush / Sui Wallet) in the Connect Wallet menu to approve Mainnet transactions.');
+          openWalletModal();
+          return;
+        }
+
+        showNotice('success', `Preparing live Mainnet Zap PTB for $${amount.toFixed(2)} USDC...`);
+        try {
+          const prepRes = await fetch('/api/vault/deposit/prepare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: currentWallet.address, amountUsdc: amount, vault: selectedVaultKey })
+          });
+          const prep = await prepRes.json();
+          if (!prep.success) {
+            showNotice('error', prep.error || 'Failed to prepare Mainnet deposit PTB.');
+            return;
+          }
+
+          const s = prep.summary || {};
+          showNotice(
+            'success',
+            `Swapping ~$${(s.swapUsdcAmount || 0).toFixed(3)} USDC (${s.swapPctOfDeposit || 0}%) to SUI & adding to CLMM LP. Confirm in ${signingCtx.wallet.name}...`
+          );
+
+          const signed = await signPreparedTxWithWallet(signingCtx, prep.txJson);
+          showNotice('success', 'Signature received. Broadcasting atomic Zap Deposit to Sui Mainnet...');
+
+          const execRes = await fetch('/api/vault/deposit/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userAddress: currentWallet.address,
+              bytes: signed.bytes || prep.bytesBase64,
+              signature: signed.signature
+            })
+          });
+          const execJson = await execRes.json();
+          if (execJson.success) {
+            showNotice(
+              'success',
+              `🎉 Live Mainnet Zap Deposit confirmed! Minted ${Number(s.sharesToMint || 0).toLocaleString()} VaultShares.`,
+              execJson.result.digest
+            );
+            clientVaultCache.clear();
+            fetchStatus({ showLoading: true });
+          } else {
+            showNotice('error', execJson.error || 'Mainnet transaction failed.');
+          }
+        } catch (err) {
+          showNotice('error', 'Live deposit cancelled or failed: ' + err.message);
+        }
+        return;
+      }
+
       showNotice('success', 'Constructing Move PTB and minting VaultShares on Sui...');
 
       try {
@@ -1433,7 +2014,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userAddress: currentWallet.address,
-            amountUsdc: amount
+            amountUsdc: amount,
+            isDemo: Boolean(currentWallet.isDemo)
           })
         });
         const json = await res.json();
@@ -1450,22 +2032,34 @@
 
     // Withdraw Logic
     function setWithdrawPct(pct) {
-      const sharesToBurn = (userShares * pct) / 100;
-      document.getElementById('withdrawInput').value = Math.round(sharesToBurn * 100) / 100;
+      let sharesToBurn = (userShares * pct) / 100;
+      if (isLiveVault) {
+        sharesToBurn = Math.floor(sharesToBurn);
+      } else {
+        sharesToBurn = Math.round(sharesToBurn * 100) / 100;
+      }
+      document.getElementById('withdrawInput').value = sharesToBurn;
       updateWithdrawPreview();
     }
 
     function updateWithdrawPreview() {
       const shares = parseFloat(document.getElementById('withdrawInput').value || 0);
       const sharePrice = currentSharePrice || 1.0;
-      const totalUsd = shares * sharePrice;
-      const usdcPart = totalUsd / 2;
-      const suiPart = usdcPart / Math.max(currentSpotPrice, 0.01);
+      let totalUsd = shares * sharePrice;
+      let usdcPart = totalUsd / 2;
+      let suiPart = usdcPart / Math.max(currentSpotPrice, 0.01);
+
+      if (isLiveVault && currentVaultAllocation && Number(currentVaultAllocation.totalShares) > 0) {
+        const frac = Math.min(1, Math.max(0, shares / Number(currentVaultAllocation.totalShares)));
+        usdcPart = (currentVaultAllocation.totalUsdc || 0) * frac;
+        suiPart = (currentVaultAllocation.totalSui || 0) * frac;
+        totalUsd = usdcPart + suiPart * currentSpotPrice;
+      }
       const remaining = Math.max(0, userShares - shares);
 
-      document.getElementById('previewWithdrawUsd').textContent = '$' + totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD';
-      document.getElementById('previewWithdrawSplit').textContent = `$${usdcPart.toFixed(2)} USDC + ${suiPart.toFixed(2)} SUI`;
-      document.getElementById('previewRemainingShares').textContent = remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Shares';
+      document.getElementById('previewWithdrawUsd').textContent = '$' + totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' USD';
+      document.getElementById('previewWithdrawSplit').textContent = `$${usdcPart.toFixed(4)} USDC + ${suiPart.toFixed(4)} SUI`;
+      document.getElementById('previewRemainingShares').textContent = remaining.toLocaleString(undefined, { maximumFractionDigits: isLiveVault ? 0 : 2 }) + ' Shares';
     }
 
     async function executeWithdrawAction() {
@@ -1479,7 +2073,68 @@
         return;
       }
       if (shares > userShares + 0.01) {
-        showNotice('error', `Insufficient shares. You have ${userShares.toFixed(2)} shares available.`);
+        showNotice('error', `Insufficient shares. You have ${userShares.toLocaleString()} shares available.`);
+        return;
+      }
+
+      if (currentExecutionMode === 'LIVE' && !currentWallet.isDemo) {
+        const sharesInt = Math.floor(shares);
+        if (sharesInt <= 0) {
+          showNotice('error', 'Enter at least 1 whole share to redeem (or click 25% / 50% / 75% / MAX).');
+          return;
+        }
+        const signingCtx = await resolveSigningWalletForCurrentAddress();
+        if (!signingCtx) {
+          showNotice('error', 'Connect a signing browser wallet (Slush / Sui Wallet) in the Connect Wallet menu to approve withdrawals.');
+          openWalletModal();
+          return;
+        }
+
+        showNotice('success', `Preparing live Mainnet Withdraw PTB for ${sharesInt.toLocaleString()} shares...`);
+        try {
+          const prepRes = await fetch('/api/vault/withdraw/prepare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userAddress: currentWallet.address, shares: String(sharesInt), vault: selectedVaultKey })
+          });
+          const prep = await prepRes.json();
+          if (!prep.success) {
+            console.error('[Withdraw Prepare Failed]', prep);
+            showNotice('error', prep.error || 'Failed to prepare Mainnet withdraw PTB.');
+            return;
+          }
+
+          const s = prep.summary || {};
+          showNotice(
+            'success',
+            `Est. return: ${(s.estOutUsdc || 0).toFixed(4)} USDC + ${(s.estOutSui || 0).toFixed(4)} SUI. Confirm in ${signingCtx.wallet.name}...`
+          );
+
+          const signed = await signPreparedTxWithWallet(signingCtx, prep.txJson);
+          showNotice('success', 'Signature received. Broadcasting atomic Redemption to Sui Mainnet...');
+
+          const execRes = await fetch('/api/vault/withdraw/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userAddress: currentWallet.address,
+              bytes: signed.bytes || prep.bytesBase64,
+              signature: signed.signature
+            })
+          });
+          const execJson = await execRes.json();
+          if (execJson.success) {
+            showNotice('success', `🎉 Live Mainnet Redemption confirmed! Burned ${sharesInt.toLocaleString()} VaultShares.`, execJson.result.digest);
+            clientVaultCache.clear();
+            fetchStatus({ showLoading: true });
+          } else {
+            console.error('[Withdraw Execute Failed]', execJson);
+            showNotice('error', execJson.error || 'Mainnet redemption failed.');
+          }
+        } catch (err) {
+          console.error('[Withdraw Flow Error]', err);
+          showNotice('error', 'Live withdrawal cancelled or failed: ' + (err?.message || String(err)));
+        }
         return;
       }
 
@@ -1491,7 +2146,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userAddress: currentWallet.address,
-            shares: shares
+            shares: shares,
+            isDemo: Boolean(currentWallet.isDemo)
           })
         });
         const json = await res.json();
@@ -1506,18 +2162,87 @@
       }
     }
 
-    function showNotice(type, msg) {
+    let noticeTimer = null;
+    function showNotice(type, msg, txDigest = null) {
       const notice = document.getElementById('actionNotice');
+      if (noticeTimer) clearTimeout(noticeTimer);
       notice.className = `action-notice notice-${type}`;
       notice.textContent = msg;
+      if (txDigest) {
+        const explorerBase = currentNetwork === 'testnet' ? 'https://testnet.suivision.xyz' : 'https://suivision.xyz';
+        const link = document.createElement('a');
+        link.href = `${explorerBase}/txblock/${txDigest}`;
+        link.target = '_blank';
+        link.style.cssText = 'color: var(--cyan); text-decoration: underline; margin-left: 8px; font-weight: 700;';
+        link.textContent = `View Tx (${txDigest.slice(0, 10)}...) ↗`;
+        notice.appendChild(link);
+      }
       notice.style.display = 'block';
-      setTimeout(() => {
+      noticeTimer = setTimeout(() => {
         notice.style.display = 'none';
-      }, 7000);
+      }, (txDigest || type === 'error') ? 15000 : 9000);
+    }
+
+    function renderDetectedWallets() {
+      const container = document.getElementById('detectedWalletsContainer');
+      if (!container) return;
+      container.innerHTML = '';
+      discoveredStandardWallets.forEach((w, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'wallet-option';
+        btn.onclick = () => connectStandardWalletObj(discoveredStandardWallets[idx]);
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'wallet-icon';
+        iconDiv.style.cssText = 'background: rgba(56, 189, 248, 0.2); color: var(--cyan); overflow: hidden;';
+        if (w.icon) {
+          const img = document.createElement('img');
+          img.src = w.icon;
+          img.alt = w.name;
+          img.style.cssText = 'width: 24px; height: 24px; border-radius: 6px;';
+          iconDiv.appendChild(img);
+        } else {
+          iconDiv.textContent = '🔐';
+        }
+        const infoDiv = document.createElement('div');
+        const title = document.createElement('div');
+        title.style.cssText = 'font-weight: 700; font-size: 14px; color: #ffffff;';
+        title.textContent = `Connect ${w.name} (Detected)`;
+        const sub = document.createElement('div');
+        sub.style.cssText = 'font-size: 12px; color: var(--green);';
+        sub.textContent = 'Wallet Standard · Supports Live Signing';
+        infoDiv.appendChild(title);
+        infoDiv.appendChild(sub);
+        btn.appendChild(iconDiv);
+        btn.appendChild(infoDiv);
+        container.appendChild(btn);
+      });
+    }
+
+    async function connectStandardWalletObj(w) {
+      try {
+        const connectFeat = w.features?.['standard:connect'];
+        const res = connectFeat ? await connectFeat.connect() : { accounts: w.accounts || [] };
+        const accounts = res?.accounts || w.accounts || [];
+        const suiAcc = accounts.find((a) => !a.chains?.length || a.chains.some((c) => String(c).startsWith('sui:'))) || accounts[0];
+        if (!suiAcc?.address) {
+          throw new Error(`No Sui accounts returned by ${w.name}`);
+        }
+        activeStandardWallet = { wallet: w, account: suiAcc };
+        currentWallet = { address: suiAcc.address, isDemo: false, walletName: w.name, canSign: true };
+        localStorage.setItem('blusky_wallet_address', suiAcc.address);
+        localStorage.setItem('blusky_wallet_mode', `standard:${w.name}`);
+        closeWalletModal();
+        showNotice('success', `Connected ${w.name}: ${suiAcc.address.slice(0, 6)}...${suiAcc.address.slice(-4)} (Signing Enabled)`);
+        fetchStatus();
+      } catch (err) {
+        showNotice('error', `${w.name} connection failed: ${err.message}`);
+      }
     }
 
     // Wallet Management
     function openWalletModal() {
+      queryStandardWallets();
+      renderDetectedWallets();
       document.getElementById('walletModal').style.display = 'flex';
     }
 
@@ -1533,31 +2258,72 @@
 
     function connectDemoWallet() {
       const demoAddress = '0x7f4a29c18b6e4d51a92e34018dfcb41928df92b1';
+      activeStandardWallet = null;
       currentWallet = { address: demoAddress, isDemo: true };
       localStorage.setItem('blusky_wallet_address', demoAddress);
+      localStorage.setItem('blusky_wallet_mode', 'demo');
       closeWalletModal();
       showNotice('success', 'Connected to 1-Click Demo Investor Wallet (0x7f4a...92b1)');
       fetchStatus();
     }
 
+    function getLegacySuiProvider() {
+      return (
+        window.slush ||
+        window.suiWallet ||
+        window.sui ||
+        window.phantom?.sui ||
+        window.suiet ||
+        window.__suiet__ ||
+        window.nightly?.sui ||
+        window.okxwallet?.sui ||
+        window.martian?.sui ||
+        window.backpack?.sui ||
+        window.surfWallet ||
+        window.ethos ||
+        null
+      );
+    }
+
     async function connectBrowserWallet() {
-      if (window.suiWallet || window.sui || window.nightly?.sui) {
+      queryStandardWallets();
+      await new Promise((r) => setTimeout(r, 100));
+      queryStandardWallets();
+      if (discoveredStandardWallets.length > 0) {
+        const preferred =
+          discoveredStandardWallets.find((w) => /slush|sui wallet/i.test(w.name)) ||
+          discoveredStandardWallets[0];
+        await connectStandardWalletObj(preferred);
+        return;
+      }
+
+      const provider = getLegacySuiProvider();
+      if (provider) {
         try {
-          const provider = window.suiWallet || window.sui || window.nightly?.sui;
           const accounts = await (provider.requestPermissions ? provider.requestPermissions() : provider.getAccounts());
-          if (accounts && accounts[0]) {
-            currentWallet = { address: accounts[0] };
-            localStorage.setItem('blusky_wallet_address', accounts[0]);
+          const first = typeof accounts?.[0] === 'string' ? accounts[0] : accounts?.[0]?.address;
+          if (first) {
+            currentWallet = { address: first, isDemo: false, canSign: true, legacyProvider: provider };
+            localStorage.setItem('blusky_wallet_address', first);
+            localStorage.setItem('blusky_wallet_mode', 'legacy');
             closeWalletModal();
-            showNotice('success', `Connected to browser wallet: ${accounts[0].slice(0, 6)}...`);
+            showNotice('success', `Connected to browser wallet: ${first.slice(0, 6)}...`);
             fetchStatus();
             return;
           }
         } catch (err) {
           console.warn('Browser wallet connection failed:', err);
+          showNotice('error', 'Browser wallet connection cancelled: ' + (err.message || err));
+          return;
         }
       }
-      alert('No Sui Wallet browser extension detected.\n\nTip: You can use the "1-Click Demo Investor Wallet" to test deposits, withdrawals, and yield instantly!');
+      alert(
+        'No Sui Wallet browser extension detected in this browser window.\n\n' +
+        'Common causes:\n' +
+        '1. Open http://localhost:3000 directly in Chrome/Brave/Edge (not an embedded IDE webview).\n' +
+        '2. Make sure your Slush / Sui Wallet / Phantom / Suiet extension is unlocked & allowed on http://localhost:3000.\n' +
+        '3. Hard-refresh the page (Ctrl+Shift+R) after unlocking.'
+      );
     }
 
     function connectCustomAddress() {
@@ -1566,16 +2332,20 @@
         alert('Please enter a valid Sui address (starting with 0x).');
         return;
       }
-      currentWallet = { address: input };
+      activeStandardWallet = null;
+      currentWallet = { address: input, isDemo: false, canSign: false };
       localStorage.setItem('blusky_wallet_address', input);
+      localStorage.setItem('blusky_wallet_mode', 'custom');
       closeWalletModal();
-      showNotice('success', `Connected to ${input.slice(0, 6)}...`);
+      showNotice('success', `Connected read-only view for ${input.slice(0, 6)}... (use Browser Wallet to sign transactions)`);
       fetchStatus();
     }
 
     function disconnectWallet() {
       currentWallet = null;
+      activeStandardWallet = null;
       localStorage.removeItem('blusky_wallet_address');
+      localStorage.removeItem('blusky_wallet_mode');
       showNotice('success', 'Wallet disconnected.');
       fetchStatus();
     }
@@ -1585,7 +2355,7 @@
         const res = await fetch('/api/simulate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scenario, address: currentWallet?.address })
+          body: JSON.stringify({ scenario, address: currentWallet?.address, vault: selectedVaultKey })
         });
         const json = await res.json();
         updateUI(json.state);

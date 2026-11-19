@@ -85,6 +85,17 @@ module blusky_vault::vault {
         vault_id: ID,
     }
 
+    /// Hot-potato receipt guaranteeing active-LP deposit re-locks the position in the same PTB
+    public struct DepositLiquidityReceipt<phantom CoinA, phantom CoinB> {
+        vault_id: ID,
+    }
+
+    /// Hot-potato receipt guaranteeing active-LP withdrawal re-locks the position in the same PTB
+    public struct WithdrawLiquidityReceipt<phantom CoinA, phantom CoinB> {
+        vault_id: ID,
+        shares_burned: u64,
+    }
+
     /// Core Shared Vault Object
     public struct Vault<phantom CoinA, phantom CoinB> has key {
         id: UID,
@@ -491,6 +502,140 @@ module blusky_vault::vault {
             new_lower_tick,
             new_upper_tick,
             timestamp_ms,
+        });
+    }
+
+    // --- Active-LP Browser Deposit & Withdraw (Hot-Potato Protected) ---
+
+    /// Temporarily extracts the active CLMM Position NFT so a zap-deposit PTB can inject
+    /// proportional liquidity directly into the existing position.
+    public fun start_deposit_liquidity<CoinA, CoinB, Pos: key + store>(
+        cap: &OperatorCap,
+        vault: &mut Vault<CoinA, CoinB>,
+    ): (Pos, DepositLiquidityReceipt<CoinA, CoinB>) {
+        assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
+
+        vault.is_rebalancing = true;
+        let pos = dof::remove<PositionKey, Pos>(&mut vault.id, PositionKey {});
+        vault.clmm_position_id = option::none();
+
+        let receipt = DepositLiquidityReceipt<CoinA, CoinB> {
+            vault_id: object::uid_to_inner(&vault.id),
+        };
+        (pos, receipt)
+    }
+
+    /// Re-locks the CLMM Position NFT, absorbs any post-add rounding dust into vault balances,
+    /// mints proportional VaultShares, emits DepositEvent, and unlocks the vault.
+    public fun finish_deposit_liquidity<CoinA, CoinB, Pos: key + store>(
+        vault: &mut Vault<CoinA, CoinB>,
+        receipt: DepositLiquidityReceipt<CoinA, CoinB>,
+        pos: Pos,
+        leftover_a: Coin<CoinA>,
+        leftover_b: Coin<CoinB>,
+        deposited_a_est: u64,
+        deposited_b_est: u64,
+        shares_to_mint: u64,
+        ctx: &mut TxContext
+    ): VaultShare<CoinA, CoinB> {
+        let DepositLiquidityReceipt { vault_id } = receipt;
+        assert!(vault_id == object::uid_to_inner(&vault.id), EInvalidReceipt);
+        assert!(vault.is_rebalancing, ENotRebalancing);
+        assert!(shares_to_mint > 0, EZeroShares);
+        assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
+
+        vault.is_rebalancing = false;
+        vault.clmm_position_id = option::some(object::id(&pos));
+        dof::add(&mut vault.id, PositionKey {}, pos);
+
+        balance::join(&mut vault.balance_a, coin::into_balance(leftover_a));
+        balance::join(&mut vault.balance_b, coin::into_balance(leftover_b));
+
+        vault.total_shares = vault.total_shares + shares_to_mint;
+
+        event::emit(DepositEvent {
+            vault_id,
+            depositor: tx_context::sender(ctx),
+            shares_minted: shares_to_mint,
+            amount_a: deposited_a_est,
+            amount_b: deposited_b_est,
+        });
+
+        VaultShare<CoinA, CoinB> {
+            id: object::new(ctx),
+            vault_id,
+            shares: shares_to_mint,
+        }
+    }
+
+    /// Burns a user's VaultShare, extracts the active CLMM Position NFT and pro-rata idle reserves,
+    /// and returns a hot-potato `WithdrawLiquidityReceipt` for atomic `remove_liquidity`.
+    public fun start_withdraw_liquidity<CoinA, CoinB, Pos: key + store>(
+        cap: &OperatorCap,
+        vault: &mut Vault<CoinA, CoinB>,
+        share: VaultShare<CoinA, CoinB>,
+        ctx: &mut TxContext
+    ): (Pos, Coin<CoinA>, Coin<CoinB>, WithdrawLiquidityReceipt<CoinA, CoinB>) {
+        assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
+
+        let VaultShare { id, vault_id: share_vault_id, shares } = share;
+        object::delete(id);
+
+        let v_id = object::uid_to_inner(&vault.id);
+        assert!(share_vault_id == v_id, EInvalidShareVault);
+        assert!(shares > 0, EZeroShares);
+        assert!(vault.total_shares > shares, EInsufficientShares);
+
+        let total_a = balance::value(&vault.balance_a);
+        let total_b = balance::value(&vault.balance_b);
+        let idle_out_a = (((shares as u128) * (total_a as u128)) / (vault.total_shares as u128)) as u64;
+        let idle_out_b = (((shares as u128) * (total_b as u128)) / (vault.total_shares as u128)) as u64;
+
+        vault.total_shares = vault.total_shares - shares;
+        vault.is_rebalancing = true;
+
+        let pos = dof::remove<PositionKey, Pos>(&mut vault.id, PositionKey {});
+        vault.clmm_position_id = option::none();
+
+        let coin_a = coin::take(&mut vault.balance_a, idle_out_a, ctx);
+        let coin_b = coin::take(&mut vault.balance_b, idle_out_b, ctx);
+
+        let receipt = WithdrawLiquidityReceipt<CoinA, CoinB> {
+            vault_id: v_id,
+            shares_burned: shares,
+        };
+        (pos, coin_a, coin_b, receipt)
+    }
+
+    /// Re-locks the CLMM Position NFT after pro-rata `remove_liquidity`, emits WithdrawEvent,
+    /// and unlocks the vault.
+    public fun finish_withdraw_liquidity<CoinA, CoinB, Pos: key + store>(
+        vault: &mut Vault<CoinA, CoinB>,
+        receipt: WithdrawLiquidityReceipt<CoinA, CoinB>,
+        pos: Pos,
+        returned_a_est: u64,
+        returned_b_est: u64,
+        ctx: &mut TxContext
+    ) {
+        let WithdrawLiquidityReceipt { vault_id, shares_burned } = receipt;
+        assert!(vault_id == object::uid_to_inner(&vault.id), EInvalidReceipt);
+        assert!(vault.is_rebalancing, ENotRebalancing);
+        assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
+
+        vault.is_rebalancing = false;
+        vault.clmm_position_id = option::some(object::id(&pos));
+        dof::add(&mut vault.id, PositionKey {}, pos);
+
+        event::emit(WithdrawEvent {
+            vault_id,
+            withdrawer: tx_context::sender(ctx),
+            shares_burned,
+            amount_a_returned: returned_a_est,
+            amount_b_returned: returned_b_est,
         });
     }
 

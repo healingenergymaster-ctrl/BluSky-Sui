@@ -11,9 +11,10 @@ import {
   calculateRangeMetrics,
   evaluateEconomicViability,
   computeDynamicClmmApr,
+  computeActiveTickClmmApr,
   getPositionTokenAmounts
 } from '../strategy/rebalanceMath.mjs';
-import { fetchLiveSuiPrice, fetchLivePoolStats } from './turbos.mjs';
+import { fetchLiveSuiPrice, fetchLivePoolStats, computeRewardersDailyUsd } from './turbos.mjs';
 
 // Official Cetus Protocol Contract & Pool Addresses
 export const CETUS_CONFIG = {
@@ -97,9 +98,16 @@ export class CetusService {
           const rawPrice = sqrtPriceToPrice(json.current_sqrt_price, decimalsA, decimalsB);
           const currentPrice = isCoinASui ? rawPrice : (rawPrice > 0 ? 1 / rawPrice : rawPrice);
 
-          const rewarders = (json.rewarder_manager?.rewarders || [])
-            .map((r) => r?.reward_coin ? normalizeStructTag(r.reward_coin.startsWith('0x') ? r.reward_coin : `0x${r.reward_coin}`) : null)
+          const rewarderDetails = (json.rewarder_manager?.rewarders || [])
+            .map((r) => {
+              if (!r?.reward_coin) return null;
+              return {
+                coinType: normalizeStructTag(r.reward_coin.startsWith('0x') ? r.reward_coin : `0x${r.reward_coin}`),
+                emissionsPerSecond: String(r.emissions_per_second ?? '0')
+              };
+            })
             .filter(Boolean);
+          const rewarders = rewarderDetails.map((r) => r.coinType);
 
           return {
             objectId: obj.objectId || poolAddress,
@@ -109,6 +117,7 @@ export class CetusService {
             decimalsA,
             decimalsB,
             rewarders,
+            rewarderDetails,
             sqrtPriceX64: String(json.current_sqrt_price),
             currentTick,
             tickSpacing: Number(json.tick_manager?.tick_spacing ?? json.position_manager?.tick_spacing ?? 60),
@@ -276,6 +285,13 @@ export class CetusService {
       }
     }
 
+    const idleUsdcRaw = coinTypeA.endsWith('::sui::SUI') ? idleB : idleA;
+    const idleSuiRaw = coinTypeA.endsWith('::sui::SUI') ? idleA : idleB;
+    const posUsdcRaw = coinTypeA.endsWith('::sui::SUI') ? positionAmounts.amountB : positionAmounts.amountA;
+    const posSuiRaw = coinTypeA.endsWith('::sui::SUI') ? positionAmounts.amountA : positionAmounts.amountB;
+    const totalUsdcRaw = idleUsdcRaw + posUsdcRaw;
+    const totalSuiRaw = idleSuiRaw + posSuiRaw;
+
     return {
       vaultId: obj.objectId || vaultId,
       coinTypeA,
@@ -284,12 +300,20 @@ export class CetusService {
       idleB,
       totalRawA: idleA + positionAmounts.amountA,
       totalRawB: idleB + positionAmounts.amountB,
+      idleUsdc: Number(idleUsdcRaw) / 1e6,
+      idleSui: Number(idleSuiRaw) / 1e9,
+      positionHoldUsdc: Number(posUsdcRaw) / 1e6,
+      positionHoldSui: Number(posSuiRaw) / 1e9,
+      totalUsdc: Number(totalUsdcRaw) / 1e6,
+      totalSui: Number(totalSuiRaw) / 1e9,
       positionNftId,
       position,
       pool,
       positionAmounts,
       isRebalancing: Boolean(j.is_rebalancing),
       totalShares: BigInt(j.total_shares || '0'),
+      feeRateBps: Number(j.fee_rate_bps ?? 1000),
+      feeTreasury: j.fee_treasury || SUI_CONFIG.feeTreasuryAddress,
       currentLowerTick: Number(j.current_lower_tick ?? 0),
       currentUpperTick: Number(j.current_upper_tick ?? 0)
     };
@@ -392,14 +416,15 @@ export class CetusService {
    * @param {string} nftId
    * @param {number|null} simulatedPrice
    */
-  async analyzePosition(poolAddress, lowerTick = -71280, upperTick = -69060, nftId = '0x_cetus_position_nft_demo', simulatedPrice = null) {
-    const pool = await this.getPool(poolAddress);
-    if (simulatedPrice !== null) {
-      pool.currentPrice = simulatedPrice;
-    }
-    const position = await this.getPosition(nftId, lowerTick, upperTick);
+  async analyzePosition(poolAddress, lowerTick = -71280, upperTick = -69060, nftId = '0x_cetus_position_nft_demo', simulatedPrice = null, options = {}) {
+    const [rawPool, position, poolStats] = await Promise.all([
+      options?.pool ? Promise.resolve(options.pool) : this.getPool(poolAddress),
+      options?.position ? Promise.resolve(options.position) : this.getPosition(nftId, lowerTick, upperTick),
+      fetchLivePoolStats(poolAddress)
+    ]);
+    const pool = simulatedPrice !== null ? { ...rawPool, currentPrice: simulatedPrice } : rawPool;
     const posIsCoinASui = position.isSimulated
-      ? true
+      ? (typeof pool.isCoinASui === 'boolean' ? pool.isCoinASui : Boolean(pool.coinTypeA?.endsWith('::sui::SUI')))
       : (position.coinTypeA ? position.coinTypeA.endsWith('::sui::SUI') : Boolean(pool.isCoinASui));
     const decimalsA = posIsCoinASui ? SUI_CONFIG.decimals.SUI : SUI_CONFIG.decimals.USDC;
     const decimalsB = posIsCoinASui ? SUI_CONFIG.decimals.USDC : SUI_CONFIG.decimals.SUI;
@@ -414,24 +439,33 @@ export class CetusService {
       posIsCoinASui
     );
 
-    const accruedFees = await this.getAccruedFees(
-      pool.objectId,
-      position.nftId,
-      pool.currentPrice
-    );
+    const cetusVolumeUsd = poolStats.volume24hUsd;
+    const cetusLiquidityUsd = poolStats.liquidityUsd;
+    const feeRateBps = Number(pool.feeRate || 2500);
+    const feeRateDecimal = feeRateBps / 1_000_000;
+    const spotPrice = (!pool.isSimulated && pool.currentPrice > 0) ? pool.currentPrice : (simulatedPrice ?? poolStats.priceUsd);
 
-    // Cetus 24h volume benchmark is typically $25M - $60M
-    const poolStats = await fetchLivePoolStats(pool.objectId);
-    const cetusVolumeUsd = Math.max(poolStats.volume24hUsd * 2.5, 12500000); // Calibrated volume premium
-    const cetusLiquidityUsd = Math.max(poolStats.liquidityUsd * 3.0, 3500000);
+    const [accruedFees, dailyRewardRevenueUsd] = await Promise.all([
+      options?.skipFees
+        ? Promise.resolve({ feeA_Sui: 0, feeB_Usdc: 0, totalFeesUsd: 0, isSimulated: false })
+        : this.getAccruedFees(pool.objectId, position.nftId, pool.currentPrice),
+      pool.isSimulated
+        ? Promise.resolve(0)
+        : computeRewardersDailyUsd(pool.rewarderDetails || [], spotPrice)
+    ]);
 
-    const clmmApr = computeDynamicClmmApr(
-      cetusVolumeUsd,
-      cetusLiquidityUsd,
-      SUI_CONFIG.strategy.targetBandWidthPct || 10,
-      0.0025,
-      rangeMetrics.inRange
-    );
+    const clmmApr = computeActiveTickClmmApr({
+      volume24hUsd: cetusVolumeUsd,
+      feeRate: feeRateDecimal,
+      poolActiveLiquidity: pool.isSimulated ? 0 : pool.liquidity,
+      spotPrice,
+      lowerPrice: rangeMetrics.priceLower,
+      upperPrice: rangeMetrics.priceUpper,
+      bandWidthPct: SUI_CONFIG.strategy.targetBandWidthPct || 10,
+      dailyRewardRevenueUsd,
+      inRange: rangeMetrics.inRange,
+      fallbackLiquidityUsd: cetusLiquidityUsd
+    });
 
     const viability = evaluateEconomicViability(
       accruedFees.totalFeesUsd,
@@ -454,7 +488,13 @@ export class CetusService {
         volume24hUsd: cetusVolumeUsd,
         liquidityUsd: cetusLiquidityUsd,
         grossApr: clmmApr.grossApr,
-        concentrationMultiplier: clmmApr.concentrationMultiplier
+        feeApr: clmmApr.feeApr,
+        rewardApr: clmmApr.rewardApr,
+        activePoolUsdInBand: clmmApr.activePoolUsdInBand,
+        concentrationMultiplier: clmmApr.concentrationMultiplier,
+        feeRateBps,
+        methodology: clmmApr.methodology,
+        volumeSource: poolStats.source
       }
     };
   }

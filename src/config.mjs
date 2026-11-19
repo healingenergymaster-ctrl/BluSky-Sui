@@ -41,14 +41,17 @@ export const SUI_CONFIG = {
   // Optional: Specific Position NFT to monitor/rebalance. If blank, monitors all user positions.
   targetPositionNft: process.env.TARGET_POSITION_NFT || '',
 
-  // On-Chain Vault Deployment (Published Move Package & Shared Object)
+  // On-Chain Vault Deployment (Published Move Package & Shared Objects)
   vault: {
     packageId: process.env.VAULT_PACKAGE_ID || '0xdbc40c8e2c8fce1e9d9e401725567bd07f841644ee0f78f73f7d2c6831487f30',
+    callPackageId: process.env.VAULT_CALL_PACKAGE_ID || process.env.VAULT_PACKAGE_ID || '0xdbc40c8e2c8fce1e9d9e401725567bd07f841644ee0f78f73f7d2c6831487f30',
     objectId: process.env.VAULT_OBJECT_ID || '0x349690a26474c0b6441ad9392e15015e286899c11f49105c25b7e8036e24bd66',
     adminCap: process.env.VAULT_ADMIN_CAP || '0x7266318ecabcb09f4fd97bb33e75576ee3cf125deb952427de959db0eda7b4e5',
     operatorCap: process.env.VAULT_OPERATOR_CAP || '0x1589848a2fd5a8054bc9d281a8628cf8d6afe43e29b6803b1bd4b9b117ae2cc3',
     upgradeCap: process.env.VAULT_UPGRADE_CAP || '0x23a6d43eaffc2f1156f749d42e2b5610d8a3cd7de6bc1026706ec32240cff16f'
   },
+
+  defaultVaultKey: process.env.DEFAULT_VAULT_KEY || (process.env.CETUS005_VAULT_OBJECT_ID ? 'cetus005' : (process.env.TURBOS005_VAULT_OBJECT_ID ? 'turbos005' : 'cetus025')),
 
   // Known Core Objects & Coins (Testnet vs Mainnet)
   coins: {
@@ -67,7 +70,7 @@ export const SUI_CONFIG = {
 
   // Target DEX Pools
   pools: {
-    turbos_sui_usdc: process.env.TURBOS_SUI_USDC_POOL || '0x5eb2dfcdd1b1552029717180891a9019a77212783a03460e536452f45f95b6ec',
+    turbos_sui_usdc: process.env.TURBOS_SUI_USDC_POOL || '0x0df4f02d0e210169cb6d5aabd03c3058328c06f2c4dbb0804faa041159c78443',
     cetus_sui_usdc: process.env.CETUS_SUI_USDC_POOL || (isTestnet ? '0xf4cac8c2720d1d250cfe50011e108db73fd3b4e9caf84fb6283ef3020b9ef576' : '0xb8d7d9e66a60c239e7a60110efcf8de6c705580ed924d0dde141f4a0e2c90105'),
     cetus_sui_usdc_tight: '0x51e883ba7c0b566a26cbc8a94cd33eb0abd418a77cc1e60ad22fd9b1f29cd2ab',
     bluefin_sui_usdc: process.env.BLUEFIN_SUI_USDC_POOL || ''
@@ -107,3 +110,77 @@ export const SUI_CONFIG = {
     primaryDex: process.env.PRIMARY_DEX || 'cetus' // 'cetus' or 'turbos'
   }
 };
+
+export function getVaultCatalog(config = SUI_CONFIG) {
+  const pkg = config.vault.packageId;
+  const callPkg = config.vault.callPackageId || pkg;
+  return {
+    cetus005: {
+      key: 'cetus005',
+      label: 'Cetus 0.05% SUI/USDC',
+      shortLabel: 'Cetus 0.05%',
+      dex: 'cetus',
+      dexName: 'Cetus Protocol',
+      feeTier: '0.05%',
+      feeRateBps: 500,
+      tickSpacing: 10,
+      isCoinASui: false,
+      poolId: config.pools.cetus_sui_usdc_tight,
+      packageId: pkg,
+      callPackageId: callPkg,
+      objectId: process.env.CETUS005_VAULT_OBJECT_ID || '',
+      adminCap: process.env.CETUS005_VAULT_ADMIN_CAP || '',
+      operatorCap: process.env.CETUS005_VAULT_OPERATOR_CAP || ''
+    },
+    turbos005: {
+      key: 'turbos005',
+      label: 'Turbos 0.05% SUI/USDC',
+      shortLabel: 'Turbos 0.05%',
+      dex: 'turbos',
+      dexName: 'Turbos Finance',
+      feeTier: '0.05%',
+      feeRateBps: 500,
+      tickSpacing: 10,
+      isCoinASui: true,
+      poolId: config.pools.turbos_sui_usdc,
+      packageId: pkg,
+      callPackageId: callPkg,
+      objectId: process.env.TURBOS005_VAULT_OBJECT_ID || '',
+      adminCap: process.env.TURBOS005_VAULT_ADMIN_CAP || '',
+      operatorCap: process.env.TURBOS005_VAULT_OPERATOR_CAP || ''
+    },
+    cetus025: {
+      key: 'cetus025',
+      label: 'Cetus 0.25% SUI/USDC (Legacy)',
+      shortLabel: 'Cetus 0.25%',
+      dex: 'cetus',
+      dexName: 'Cetus Protocol',
+      feeTier: '0.25%',
+      feeRateBps: 2500,
+      tickSpacing: 60,
+      isCoinASui: false,
+      poolId: config.pools.cetus_sui_usdc,
+      packageId: pkg,
+      callPackageId: callPkg,
+      objectId: config.vault.objectId || '',
+      adminCap: config.vault.adminCap || '',
+      operatorCap: config.vault.operatorCap || ''
+    }
+  };
+}
+
+export function resolveVaultConfig(vaultKeyOrId = null, config = SUI_CONFIG) {
+  const catalog = getVaultCatalog(config);
+  if (vaultKeyOrId && catalog[vaultKeyOrId]) {
+    return catalog[vaultKeyOrId];
+  }
+  if (vaultKeyOrId) {
+    const byId = Object.values(catalog).find(
+      (v) => v.objectId && v.objectId.toLowerCase() === String(vaultKeyOrId).toLowerCase()
+    );
+    if (byId) return byId;
+  }
+  const preferredKey = process.env.DEFAULT_VAULT_KEY
+    || (catalog.cetus005.objectId ? 'cetus005' : (catalog.turbos005.objectId ? 'turbos005' : 'cetus025'));
+  return catalog[preferredKey] || catalog.cetus025;
+}

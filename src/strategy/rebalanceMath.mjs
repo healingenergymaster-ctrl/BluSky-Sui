@@ -289,13 +289,15 @@ export function computeDynamicClmmApr(
   poolLiquidityUsd = 845000,
   bandWidthPct = 10,
   feeRate = 0.0005,
-  inRange = true
+  inRange = true,
+  options = {}
 ) {
   if (!inRange) {
     return {
       grossApr: 0.0,
       volume24hUsd: Math.round(volume24hUsd),
       poolLiquidityUsd: Math.round(poolLiquidityUsd),
+      feeRatePct: Math.round(feeRate * 10000) / 100,
       concentrationMultiplier: 0,
       inRange: false,
       dailyFeeRevenueUsd: 0,
@@ -303,11 +305,14 @@ export function computeDynamicClmmApr(
     };
   }
 
-  // Concentration Multiplier for symmetric ±bandWidthPct around spot:
+  // Concentration Multiplier from real active bounds when provided, else symmetric ±bandWidthPct:
   // M = 1 / (1 - sqrt(P_lower / P_upper))
-  const lowerRatio = Math.max(0.01, 1 - (bandWidthPct / 100));
-  const upperRatio = 1 + (bandWidthPct / 100);
-  const rawMultiplier = 1 / (1 - Math.sqrt(lowerRatio / upperRatio));
+  const lowerPrice = Number(options?.lowerPrice || 0);
+  const upperPrice = Number(options?.upperPrice || 0);
+  const priceRatio = (lowerPrice > 0 && upperPrice > lowerPrice)
+    ? Math.max(0.01, lowerPrice / upperPrice)
+    : Math.max(0.01, 1 - (bandWidthPct / 100)) / (1 + (bandWidthPct / 100));
+  const rawMultiplier = 1 / Math.max(1e-6, 1 - Math.sqrt(priceRatio));
   
   // Empirical clustering factor on SUI/USDC active ticks
   const effectiveMultiplier = Math.min(15.0, Math.max(1.0, rawMultiplier * 0.103));
@@ -319,13 +324,114 @@ export function computeDynamicClmmApr(
   const grossApr = Math.round(fullRangeYield * effectiveMultiplier * 1000) / 10;
 
   return {
-    grossApr: Math.min(250.0, Math.max(15.0, grossApr)),
+    grossApr: Math.min(500.0, Math.max(0, grossApr)),
     volume24hUsd: Math.round(volume24hUsd),
     poolLiquidityUsd: Math.round(poolLiquidityUsd),
-    feeRatePct: feeRate * 100,
+    feeRatePct: Math.round(feeRate * 10000) / 100,
     concentrationMultiplier: Math.round(effectiveMultiplier * 10) / 10,
     dailyFeeRevenueUsd: Math.round(volume24hUsd * feeRate * 100) / 100,
     inRange: true
+  };
+}
+
+/**
+ * Computes USD value of 1 raw unit of CLMM liquidity L across [lowerPrice, upperPrice]
+ * at spotPrice (USDC per SUI, SUI decimals=9, USDC decimals=6). Scale-invariant in token order.
+ */
+export function computeUsdPerLiquidityUnit(spotPrice, lowerPrice, upperPrice) {
+  if (!(spotPrice > 0 && lowerPrice > 0 && upperPrice > lowerPrice && spotPrice > lowerPrice && spotPrice < upperPrice)) {
+    return 0;
+  }
+  const sqrtP = Math.sqrt(spotPrice / 1000);
+  const sqrtPl = Math.sqrt(lowerPrice / 1000);
+  const sqrtPu = Math.sqrt(upperPrice / 1000);
+  const suiPerL = (1 / sqrtP - 1 / sqrtPu) / 1e9;
+  const usdcPerL = (sqrtP - sqrtPl) / 1e6;
+  return suiPerL * spotPrice + usdcPerL;
+}
+
+/**
+ * Computes true executable CLMM APR using on-chain active-tick liquidity L and pool reward emissions.
+ * Falls back cleanly to computeDynamicClmmApr (TVL-based) if live active L or spot price is unavailable.
+ */
+export function computeActiveTickClmmApr({
+  volume24hUsd = 0,
+  feeRate = 0.0005,
+  poolActiveLiquidity = 0,
+  spotPrice = 0,
+  lowerPrice = 0,
+  upperPrice = 0,
+  bandWidthPct = 10,
+  dailyRewardRevenueUsd = 0,
+  inRange = true,
+  fallbackLiquidityUsd = 845000
+} = {}) {
+  if (!inRange) {
+    return {
+      grossApr: 0.0,
+      feeApr: 0.0,
+      rewardApr: 0.0,
+      activePoolUsdInBand: 0,
+      volume24hUsd: Math.round(volume24hUsd),
+      poolLiquidityUsd: Math.round(fallbackLiquidityUsd),
+      feeRatePct: Math.round(feeRate * 10000) / 100,
+      concentrationMultiplier: 0,
+      dailyFeeRevenueUsd: 0,
+      dailyRewardRevenueUsd: 0,
+      methodology: 'onchain_active_L',
+      inRange: false
+    };
+  }
+
+  let resolvedLow = Number(lowerPrice || 0);
+  let resolvedHigh = Number(upperPrice || 0);
+  if (!(resolvedLow > 0 && resolvedHigh > resolvedLow && spotPrice > resolvedLow && spotPrice < resolvedHigh) && spotPrice > 0) {
+    resolvedLow = spotPrice * Math.max(0.05, 1 - bandWidthPct / 100);
+    resolvedHigh = spotPrice * (1 + bandWidthPct / 100);
+  }
+
+  const activeL = Number(poolActiveLiquidity || 0);
+  const usdPerL = computeUsdPerLiquidityUnit(spotPrice, resolvedLow, resolvedHigh);
+  const activePoolUsdInBand = (activeL > 0 && usdPerL > 0) ? (activeL * usdPerL) : 0;
+
+  if (activePoolUsdInBand > 0) {
+    const dailyFeeRevenueUsd = volume24hUsd * feeRate;
+    const feeApr = Math.round(((dailyFeeRevenueUsd / activePoolUsdInBand) * 365 * 100) * 10) / 10;
+    const rewardApr = Math.round(((dailyRewardRevenueUsd / activePoolUsdInBand) * 365 * 100) * 10) / 10;
+    const grossApr = Math.min(999.9, Math.max(0, Math.round((feeApr + rewardApr) * 10) / 10));
+    const rawRatio = fallbackLiquidityUsd > 0 ? (fallbackLiquidityUsd / activePoolUsdInBand) : 1.0;
+
+    return {
+      grossApr,
+      feeApr,
+      rewardApr,
+      activePoolUsdInBand: Math.round(activePoolUsdInBand),
+      volume24hUsd: Math.round(volume24hUsd),
+      poolLiquidityUsd: Math.round(fallbackLiquidityUsd),
+      feeRatePct: Math.round(feeRate * 10000) / 100,
+      concentrationMultiplier: Math.min(25.0, Math.max(0.1, Math.round(rawRatio * 10) / 10)),
+      dailyFeeRevenueUsd: Math.round(dailyFeeRevenueUsd * 100) / 100,
+      dailyRewardRevenueUsd: Math.round(dailyRewardRevenueUsd * 100) / 100,
+      methodology: 'onchain_active_L',
+      inRange: true
+    };
+  }
+
+  const fallback = computeDynamicClmmApr(
+    volume24hUsd,
+    fallbackLiquidityUsd,
+    bandWidthPct,
+    feeRate,
+    inRange,
+    { lowerPrice: resolvedLow, upperPrice: resolvedHigh }
+  );
+  return {
+    ...fallback,
+    feeApr: fallback.grossApr,
+    rewardApr: 0,
+    activePoolUsdInBand: 0,
+    dailyRewardRevenueUsd: 0,
+    methodology: 'tvl_fallback'
   };
 }
 

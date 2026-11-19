@@ -7,6 +7,7 @@ import { SUI_CONFIG } from '../config.mjs';
 export const VAULT_PACKAGE_CONFIG = {
   // Move package address (published package ID on mainnet/testnet)
   packageId: SUI_CONFIG.vault.packageId || process.env.VAULT_PACKAGE_ID || '0xdbc40c8e2c8fce1e9d9e401725567bd07f841644ee0f78f73f7d2c6831487f30',
+  callPackageId: SUI_CONFIG.vault.callPackageId || SUI_CONFIG.vault.packageId || process.env.VAULT_PACKAGE_ID || '0xdbc40c8e2c8fce1e9d9e401725567bd07f841644ee0f78f73f7d2c6831487f30',
   vaultObjectId: SUI_CONFIG.vault.objectId || process.env.VAULT_OBJECT_ID || '0x349690a26474c0b6441ad9392e15015e286899c11f49105c25b7e8036e24bd66',
   moduleName: 'vault',
   defaultFeeTreasury: SUI_CONFIG.feeTreasuryAddress,

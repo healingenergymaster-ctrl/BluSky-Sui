@@ -20,6 +20,7 @@
     "demo:cetus": "node scripts/run_cetus_rebalance_demo.mjs"
   },
   "dependencies": {
+    "@bluefin-exchange/pro-sdk": "^2.4.0",
     "@cetusprotocol/cetus-sui-clmm-sdk": "^5.4.0",
     "@mysten/sui": "^2.38.0",
     "bignumber.js": "^9.1.2",

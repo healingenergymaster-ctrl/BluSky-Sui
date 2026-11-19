@@ -886,4 +886,107 @@ module blusky_vault::vault_tests {
         ts::return_shared(vault);
         ts::end(scenario);
     }
+
+    // Test 18: Active-LP zap deposit and active-LP withdraw flow
+    #[test]
+    fun test_active_lp_deposit_and_withdraw_flow() {
+        let mut scenario = ts::begin(ADMIN);
+        let (_v_id, _a_id, op_id) = setup_vault(&mut scenario);
+
+        // Initial deposit & lock MockPositionNFT
+        ts::next_tx(&mut scenario, USER1);
+        let mut vault = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let c_a = coin::mint_for_testing<SUI_TEST>(10000, ts::ctx(&mut scenario));
+        let c_b = coin::mint_for_testing<USDC_TEST>(10000, ts::ctx(&mut scenario));
+        let share1 = vault::deposit(&mut vault, c_a, c_b, ts::ctx(&mut scenario));
+        ts::return_shared(vault);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault_admin = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let op_cap = ts::take_from_sender_by_id<OperatorCap>(&scenario, op_id);
+        let pos = new_mock_position(71100, 73140, 50000, ts::ctx(&mut scenario));
+        vault::deposit_position(&op_cap, &mut vault_admin, pos);
+
+        // Active-LP zap deposit for USER2
+        let (pos_dep, dep_receipt) = vault::start_deposit_liquidity<SUI_TEST, USDC_TEST, MockPositionNFT>(
+            &op_cap,
+            &mut vault_admin,
+        );
+        assert!(vault::is_rebalancing(&vault_admin), 1801);
+        let dust_a = coin::mint_for_testing<SUI_TEST>(10, ts::ctx(&mut scenario));
+        let dust_b = coin::mint_for_testing<USDC_TEST>(20, ts::ctx(&mut scenario));
+        let share2 = vault::finish_deposit_liquidity<SUI_TEST, USDC_TEST, MockPositionNFT>(
+            &mut vault_admin,
+            dep_receipt,
+            pos_dep,
+            dust_a,
+            dust_b,
+            5000,
+            5000,
+            10000,
+            ts::ctx(&mut scenario),
+        );
+        assert!(!vault::is_rebalancing(&vault_admin), 1802);
+        assert!(vault::total_shares(&vault_admin) == 30000, 1803);
+        assert!(vault::share_shares(&share2) == 10000, 1804);
+
+        // Active-LP partial withdraw of USER2 share2
+        let (pos_wd, idle_a, idle_b, wd_receipt) = vault::start_withdraw_liquidity<SUI_TEST, USDC_TEST, MockPositionNFT>(
+            &op_cap,
+            &mut vault_admin,
+            share2,
+            ts::ctx(&mut scenario),
+        );
+        assert!(vault::is_rebalancing(&vault_admin), 1805);
+        vault::finish_withdraw_liquidity<SUI_TEST, USDC_TEST, MockPositionNFT>(
+            &mut vault_admin,
+            wd_receipt,
+            pos_wd,
+            5000,
+            5000,
+            ts::ctx(&mut scenario),
+        );
+        assert!(!vault::is_rebalancing(&vault_admin), 1806);
+        assert!(vault::total_shares(&vault_admin) == 20000, 1807);
+
+        coin::burn_for_testing(idle_a);
+        coin::burn_for_testing(idle_b);
+        ts::return_to_sender(&scenario, op_cap);
+        ts::return_shared(vault_admin);
+
+        ts::next_tx(&mut scenario, USER1);
+        let mut vault_u1 = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let (op_a, op_b) = vault::withdraw(&mut vault_u1, share1, ts::ctx(&mut scenario));
+        coin::burn_for_testing(op_a);
+        coin::burn_for_testing(op_b);
+        ts::return_shared(vault_u1);
+        ts::end(scenario);
+    }
+
+    // Negative 18: Cross-vault operator cap fails on start_deposit_liquidity
+    #[test]
+    #[expected_failure(abort_code = blusky_vault::vault::EInvalidOperatorCap)]
+    fun test_active_lp_deposit_cross_vault_cap_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let (v1_id, _a1_id, _op1_id) = setup_vault(&mut scenario);
+        let (_v2_id, _a2_id, op2_id) = setup_vault(&mut scenario);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault1 = ts::take_shared_by_id<Vault<SUI_TEST, USDC_TEST>>(&scenario, v1_id);
+        let cap2 = ts::take_from_sender_by_id<OperatorCap>(&scenario, op2_id);
+
+        let (pos, receipt) = vault::start_deposit_liquidity<SUI_TEST, USDC_TEST, MockPositionNFT>(
+            &cap2,
+            &mut vault1,
+        );
+        let dust_a = coin::zero<SUI_TEST>(ts::ctx(&mut scenario));
+        let dust_b = coin::zero<USDC_TEST>(ts::ctx(&mut scenario));
+        let s = vault::finish_deposit_liquidity(&mut vault1, receipt, pos, dust_a, dust_b, 0, 0, 1, ts::ctx(&mut scenario));
+        let (out_a, out_b) = vault::withdraw(&mut vault1, s, ts::ctx(&mut scenario));
+        coin::burn_for_testing(out_a);
+        coin::burn_for_testing(out_b);
+        ts::return_to_sender(&scenario, cap2);
+        ts::return_shared(vault1);
+        ts::end(scenario);
+    }
 }
