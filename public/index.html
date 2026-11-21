@@ -760,9 +760,10 @@
     <!-- Top Key Metrics -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">Total Vault TVL <span style="color: var(--green);">● Active</span></div>
+        <div class="stat-label">Vault TVL <span style="color: var(--green);">● Active</span></div>
         <div class="stat-value" id="valTvl">$0.00</div>
         <div class="stat-sub" id="valTvlSub">SUI / Circle USDC Pair</div>
+        <div class="stat-sub" id="valCombinedTvl" style="color: var(--cyan); font-size: 11px; margin-top: 2px; display: none;"></div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Net Investor APY <span style="background: rgba(0, 242, 254, 0.12); color: var(--cyan); padding: 2px 6px; border-radius: 4px; font-size: 10px;">⚡ Dynamic Trailing</span></div>
@@ -1059,7 +1060,7 @@
                 <button class="chip-btn" onclick="setWithdrawPct(25)">25%</button>
                 <button class="chip-btn" onclick="setWithdrawPct(50)">50%</button>
                 <button class="chip-btn" onclick="setWithdrawPct(75)">75%</button>
-                <button class="chip-btn" onclick="setWithdrawPct(100)">MAX (100%)</button>
+                <button class="chip-btn" onclick="setWithdrawPct(100)">MAX</button>
               </div>
             </div>
 
@@ -1507,6 +1508,27 @@
           document.getElementById('valTvlSub').textContent = `${b.totalUsdc.toFixed(4)} USDC + ${b.totalSui.toFixed(4)} SUI`;
         } else {
           document.getElementById('valTvlSub').textContent = 'SUI / Circle USDC Pair';
+        }
+      }
+      if (document.getElementById('valCombinedTvl')) {
+        const combinedEl = document.getElementById('valCombinedTvl');
+        const breakdown = Array.isArray(data.monitor?.hedging?.vaultBreakdown)
+          ? data.monitor.hedging.vaultBreakdown
+          : null;
+        if (breakdown && breakdown.length > 0) {
+          const selectedKey = data.clmm?.vaultKey || data.vault?.vaultKey;
+          const totalCombined = breakdown.reduce((sum, item) => {
+            const val = item.key === selectedKey ? Number(data.vault?.tvlUsd || 0) : Number(item.tvlUsd || 0);
+            return sum + (Number.isFinite(val) ? val : 0);
+          }, 0);
+          const activeCount = breakdown.filter((item) => {
+            const val = item.key === selectedKey ? Number(data.vault?.tvlUsd || 0) : Number(item.tvlUsd || 0);
+            return val > 0.01;
+          }).length;
+          combinedEl.textContent = `Combined Vaults TVL: $${totalCombined.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${activeCount}/${breakdown.length} active)`;
+          combinedEl.style.display = 'block';
+        } else {
+          combinedEl.style.display = 'none';
         }
       }
       document.getElementById('valNetApy').textContent = data.vault.apy.netInvestorApy;
@@ -2034,7 +2056,15 @@
     function setWithdrawPct(pct) {
       let sharesToBurn = (userShares * pct) / 100;
       if (isLiveVault) {
-        sharesToBurn = Math.floor(sharesToBurn);
+        const userInt = BigInt(Math.max(0, Math.floor(userShares || 0)));
+        const rawTotal = currentVaultAllocation?.totalShares;
+        const totalInt = rawTotal ? BigInt(rawTotal) : 0n;
+        const maxRedeemable = totalInt > 1n ? totalInt - 1n : (totalInt === 1n ? 0n : userInt);
+        const targetInt = pct >= 100
+          ? (userInt < maxRedeemable ? userInt : maxRedeemable)
+          : BigInt(Math.max(0, Math.floor(sharesToBurn)));
+        const capped = totalInt > 0n && targetInt >= totalInt ? maxRedeemable : targetInt;
+        sharesToBurn = capped.toString();
       } else {
         sharesToBurn = Math.round(sharesToBurn * 100) / 100;
       }

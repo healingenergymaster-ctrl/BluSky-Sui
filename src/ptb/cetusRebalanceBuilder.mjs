@@ -718,7 +718,7 @@ export class CetusRebalancePtbBuilder {
       lowerTick: pos.lowerTick,
       upperTick: pos.upperTick,
       feeRateBps: pool.feeRate || 2500,
-      safetyBufferPct: 1.5
+      safetyBufferPct: 5.0
     });
 
     const rawPriceBPerA = Number(swapPlan.rawPriceBPerA || 0);
