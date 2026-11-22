@@ -4,6 +4,48 @@
 [move]
 version = 4
 
+[pinned.mainnet.MoveStdlib]
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "05ad86a3e86c522deea116f80dc2bf2309a53363" }
+use_environment = "mainnet"
+manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
+deps = {}
+
+[pinned.mainnet.Sui]
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\sui-framework', rev = "05ad86a3e86c522deea116f80dc2bf2309a53363" }
+use_environment = "mainnet"
+manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263195"
+deps = { MoveStdlib = "MoveStdlib" }
+
+[pinned.mainnet.TurbosCLMM]
+source = { local = 'vendor\turbos_clmm' }
+use_environment = "mainnet"
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.blusky_vault]
+source = { root = true }
+use_environment = "mainnet"
+manifest_digest = "9F1DE39F0D2C6629617028AE72C21CF2E8016082F816AB722579012ECEDD8AA3"
+deps = { TurbosCLMM = "TurbosCLMM", cetusclmm = "cetusclmm", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.cetusclmm]
+source = { local = 'vendor\cetus_clmm' }
+use_environment = "mainnet"
+manifest_digest = "BD2AFD7E81C70B9DB6ECF7B236EA973D834C716E0DA9247424AE2DC4CF18C37B"
+deps = { integer_mate = "integer_mate", move_stl = "move_stl", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.integer_mate]
+source = { local = 'vendor\integer_mate' }
+use_environment = "mainnet"
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.move_stl]
+source = { local = 'vendor\move_stl' }
+use_environment = "mainnet"
+manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
 [pinned.testnet.MoveStdlib]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = 'crates\sui-framework\packages\move-stdlib', rev = "05ad86a3e86c522deea116f80dc2bf2309a53363" }
 use_environment = "testnet"

@@ -1153,6 +1153,7 @@
 
       <!-- Sui Wallet Standard Option -->
       <div id="detectedWalletsContainer" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px;"></div>
+      <div id="walletAccountPicker" style="display: none; flex-direction: column; gap: 8px; margin-bottom: 12px; padding: 12px; border-radius: 10px; background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.25);"></div>
       <button class="wallet-option" onclick="connectBrowserWallet()">
         <div class="wallet-icon" style="background: rgba(34, 197, 94, 0.2); color: var(--green);">💧</div>
         <div>
@@ -2248,22 +2249,72 @@
       });
     }
 
+    function selectStandardAccount(w, suiAcc) {
+      activeStandardWallet = { wallet: w, account: suiAcc };
+      currentWallet = { address: suiAcc.address, isDemo: false, walletName: w.name, canSign: true };
+      localStorage.setItem('blusky_wallet_address', suiAcc.address);
+      localStorage.setItem('blusky_wallet_mode', `standard:${w.name}`);
+      const picker = document.getElementById('walletAccountPicker');
+      if (picker) {
+        picker.style.display = 'none';
+        picker.innerHTML = '';
+      }
+      closeWalletModal();
+      showNotice('success', `Connected ${w.name}: ${suiAcc.address.slice(0, 6)}...${suiAcc.address.slice(-4)} (Signing Enabled)`);
+      fetchStatus();
+    }
+
+    function subscribeWalletEvents(w) {
+      const eventsFeat = w.features?.['standard:events'];
+      if (!eventsFeat || typeof eventsFeat.on !== 'function' || w.__bluskyEventsBound) return;
+      w.__bluskyEventsBound = true;
+      try {
+        eventsFeat.on('change', ({ accounts }) => {
+          if (!accounts || !currentWallet || currentWallet.walletName !== w.name) return;
+          const suiAccs = accounts.filter((a) => !a.chains?.length || a.chains.some((c) => String(c).startsWith('sui:')));
+          if (suiAccs.length === 0) return;
+          const stillPresent = suiAccs.find((a) => a.address.toLowerCase() === currentWallet.address.toLowerCase());
+          if (!stillPresent || suiAccs.length === 1) {
+            selectStandardAccount(w, suiAccs[0]);
+          }
+        });
+      } catch {}
+    }
+
     async function connectStandardWalletObj(w) {
       try {
+        subscribeWalletEvents(w);
+        // Disconnect stale permission first only if switching accounts isn't shown yet
         const connectFeat = w.features?.['standard:connect'];
         const res = connectFeat ? await connectFeat.connect() : { accounts: w.accounts || [] };
         const accounts = res?.accounts || w.accounts || [];
-        const suiAcc = accounts.find((a) => !a.chains?.length || a.chains.some((c) => String(c).startsWith('sui:'))) || accounts[0];
-        if (!suiAcc?.address) {
+        const suiAccs = accounts.filter((a) => !a.chains?.length || a.chains.some((c) => String(c).startsWith('sui:')));
+        const list = suiAccs.length > 0 ? suiAccs : accounts;
+        if (list.length === 0 || !list[0]?.address) {
           throw new Error(`No Sui accounts returned by ${w.name}`);
         }
-        activeStandardWallet = { wallet: w, account: suiAcc };
-        currentWallet = { address: suiAcc.address, isDemo: false, walletName: w.name, canSign: true };
-        localStorage.setItem('blusky_wallet_address', suiAcc.address);
-        localStorage.setItem('blusky_wallet_mode', `standard:${w.name}`);
-        closeWalletModal();
-        showNotice('success', `Connected ${w.name}: ${suiAcc.address.slice(0, 6)}...${suiAcc.address.slice(-4)} (Signing Enabled)`);
-        fetchStatus();
+        if (list.length === 1) {
+          selectStandardAccount(w, list[0]);
+          return;
+        }
+        // Multiple accounts authorized in extension: let user pick which account to activate
+        const picker = document.getElementById('walletAccountPicker');
+        if (!picker) {
+          selectStandardAccount(w, list[0]);
+          return;
+        }
+        picker.innerHTML = `<div style="font-size: 12px; font-weight: 700; color: var(--cyan); margin-bottom: 4px;">Select ${w.name} Account (${list.length} authorized):</div>`;
+        list.forEach((acc, idx) => {
+          const b = document.createElement('button');
+          b.className = 'wallet-option';
+          b.style.marginBottom = '0';
+          b.onclick = () => selectStandardAccount(w, acc);
+          b.innerHTML = `<div class="wallet-icon" style="background: rgba(34, 211, 238, 0.16); color: var(--cyan); font-size: 13px;">#${idx + 1}</div>` +
+            `<div style="text-align:left;"><div style="font-weight:700; font-size:13px; color:#fff; font-family:monospace;">${acc.address.slice(0, 10)}...${acc.address.slice(-8)}</div>` +
+            `<div style="font-size:11px; color:var(--text-muted);">${acc.label || 'Click to connect & sign with this account'}</div></div>`;
+          picker.appendChild(b);
+        });
+        picker.style.display = 'flex';
       } catch (err) {
         showNotice('error', `${w.name} connection failed: ${err.message}`);
       }
@@ -2273,6 +2324,11 @@
     function openWalletModal() {
       queryStandardWallets();
       renderDetectedWallets();
+      const picker = document.getElementById('walletAccountPicker');
+      if (picker) {
+        picker.style.display = 'none';
+        picker.innerHTML = '';
+      }
       document.getElementById('walletModal').style.display = 'flex';
     }
 
@@ -2371,11 +2427,17 @@
       fetchStatus();
     }
 
-    function disconnectWallet() {
+    async function disconnectWallet() {
+      const prevWallet = activeStandardWallet?.wallet;
       currentWallet = null;
       activeStandardWallet = null;
       localStorage.removeItem('blusky_wallet_address');
       localStorage.removeItem('blusky_wallet_mode');
+      if (prevWallet?.features?.['standard:disconnect']?.disconnect) {
+        try {
+          await prevWallet.features['standard:disconnect'].disconnect();
+        } catch {}
+      }
       showNotice('success', 'Wallet disconnected.');
       fetchStatus();
     }

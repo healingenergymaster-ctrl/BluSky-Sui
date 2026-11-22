@@ -1,8 +1,16 @@
 // move/tests/vault_tests.move
 #[test_only]
 module blusky_vault::vault_tests {
+    use sui::balance;
+    use sui::clock;
     use sui::coin::{Self, Coin};
     use sui::test_scenario::{Self as ts, Scenario};
+    use cetusclmm::config as cetus_config;
+    use cetusclmm::pool as cetus_pool;
+    use cetusclmm::position as cetus_position;
+    use turbos_clmm::pool as turbos_pool;
+    use turbos_clmm::position_manager as turbos_pm;
+    use turbos_clmm::position_nft as turbos_nft;
     use blusky_vault::vault::{
         Self,
         Vault,
@@ -987,6 +995,314 @@ module blusky_vault::vault_tests {
         coin::burn_for_testing(out_b);
         ts::return_to_sender(&scenario, cap2);
         ts::return_shared(vault1);
+        ts::end(scenario);
+    }
+
+    public struct FEE_TEST has drop {}
+
+    // Test 19: Permissionless Cetus active deposit & withdraw by independent non-operator users
+    #[test]
+    fun test_permissionless_cetus_active_deposit_and_withdraw() {
+        let mut scenario = ts::begin(ADMIN);
+        let (_v_id, _a_id, op_id) = setup_vault(&mut scenario);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let op_cap = ts::take_from_sender_by_id<OperatorCap>(&scenario, op_id);
+
+        // Seed initial vault shares (total = 10000: 1000 locked, 9000 to ADMIN)
+        let seed_a = coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario));
+        let seed_b = coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario));
+        let admin_share = vault::deposit(&mut vault, seed_a, seed_b, ts::ctx(&mut scenario));
+
+        let g_cfg = cetus_config::new_for_testing(ts::ctx(&mut scenario));
+        let mut pool = cetus_pool::new_for_testing<SUI_TEST, USDC_TEST>(
+            balance::create_for_testing<SUI_TEST>(10000),
+            balance::create_for_testing<USDC_TEST>(10000),
+            ts::ctx(&mut scenario),
+        );
+        let pos = cetus_position::new_for_testing(object::id(&pool), 20000, ts::ctx(&mut scenario));
+        vault::deposit_position(&op_cap, &mut vault, pos);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        ts::return_to_sender(&scenario, op_cap);
+        ts::return_shared(vault);
+
+        // USER1 deposits permissionlessly (NO OperatorCap required)
+        ts::next_tx(&mut scenario, USER1);
+        let mut vault_u1 = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let in_a1 = coin::mint_for_testing<SUI_TEST>(6000, ts::ctx(&mut scenario));
+        let in_b1 = coin::mint_for_testing<USDC_TEST>(6000, ts::ctx(&mut scenario));
+        let (u1_share, left_a1, left_b1) = vault::deposit_cetus_active(
+            &mut vault_u1,
+            &g_cfg,
+            &mut pool,
+            in_a1,
+            in_b1,
+            5000,
+            true,
+            4000,
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        // Mock adds 5000*2 = 10000 liq -> +50% of 20000 liq = 5000 shares
+        assert!(vault::share_shares(&u1_share) == 5000, 1901);
+        assert!(coin::value(&left_a1) == 1000, 1902);
+        assert!(coin::value(&left_b1) == 1000, 1903);
+        assert!(vault::total_shares(&vault_u1) == 15000, 1904);
+        coin::burn_for_testing(left_a1);
+        coin::burn_for_testing(left_b1);
+
+        // USER1 withdraws their entire owned VaultShare permissionlessly (NO OperatorCap)
+        let (wd_a1, wd_b1) = vault::withdraw_cetus_active(
+            &mut vault_u1,
+            &g_cfg,
+            &mut pool,
+            u1_share,
+            1,
+            1,
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        assert!(coin::value(&wd_a1) > 0 && coin::value(&wd_b1) > 0, 1905);
+        assert!(vault::total_shares(&vault_u1) == 10000, 1906);
+        coin::burn_for_testing(wd_a1);
+        coin::burn_for_testing(wd_b1);
+        ts::return_shared(vault_u1);
+
+        // Cleanup
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault_end = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let (admin_out_a, admin_out_b) = vault::withdraw_cetus_active(
+            &mut vault_end,
+            &g_cfg,
+            &mut pool,
+            admin_share,
+            1,
+            1,
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        coin::burn_for_testing(admin_out_a);
+        coin::burn_for_testing(admin_out_b);
+        assert!(vault::total_shares(&vault_end) == 1000, 1907);
+
+        clock::destroy_for_testing(clock);
+        cetus_config::destroy_for_testing(g_cfg);
+        cetus_pool::destroy_for_testing(pool);
+        ts::return_shared(vault_end);
+        ts::end(scenario);
+    }
+
+    // Test 20: Permissionless Turbos active deposit & withdraw by independent non-operator user
+    #[test]
+    fun test_permissionless_turbos_active_deposit_and_withdraw() {
+        let mut scenario = ts::begin(ADMIN);
+        let (_v_id, _a_id, op_id) = setup_vault(&mut scenario);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let op_cap = ts::take_from_sender_by_id<OperatorCap>(&scenario, op_id);
+
+        let seed_a = coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario));
+        let seed_b = coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario));
+        let admin_share = vault::deposit(&mut vault, seed_a, seed_b, ts::ctx(&mut scenario));
+
+        let mut pool = turbos_pool::new_for_testing<SUI_TEST, USDC_TEST, FEE_TEST>(
+            balance::create_for_testing<SUI_TEST>(10000),
+            balance::create_for_testing<USDC_TEST>(10000),
+            ts::ctx(&mut scenario),
+        );
+        let versioned = turbos_pool::new_versioned_for_testing(ts::ctx(&mut scenario));
+        let mut positions = turbos_pm::new_for_testing(ts::ctx(&mut scenario));
+        let nft = turbos_nft::new_for_testing(object::id(&pool), object::id(&vault), ts::ctx(&mut scenario));
+        turbos_pm::register_for_testing(&mut positions, &nft, 20000);
+        vault::deposit_position(&op_cap, &mut vault, nft);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        ts::return_to_sender(&scenario, op_cap);
+        ts::return_shared(vault);
+
+        ts::next_tx(&mut scenario, USER1);
+        let mut vault_u1 = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let in_a1 = coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario));
+        let in_b1 = coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario));
+        let (u1_share, left_a1, left_b1) = vault::deposit_turbos_active(
+            &mut vault_u1,
+            &mut pool,
+            &mut positions,
+            in_a1,
+            in_b1,
+            5000,
+            5000,
+            4000,
+            9999999,
+            &clock,
+            &versioned,
+            ts::ctx(&mut scenario),
+        );
+        assert!(vault::share_shares(&u1_share) == 5000, 2001);
+        assert!(vault::total_shares(&vault_u1) == 15000, 2002);
+        coin::burn_for_testing(left_a1);
+        coin::burn_for_testing(left_b1);
+
+        let (wd_a1, wd_b1) = vault::withdraw_turbos_active(
+            &mut vault_u1,
+            &mut pool,
+            &mut positions,
+            u1_share,
+            1,
+            1,
+            9999999,
+            &clock,
+            &versioned,
+            ts::ctx(&mut scenario),
+        );
+        assert!(coin::value(&wd_a1) > 0 && coin::value(&wd_b1) > 0, 2003);
+        assert!(vault::total_shares(&vault_u1) == 10000, 2004);
+        coin::burn_for_testing(wd_a1);
+        coin::burn_for_testing(wd_b1);
+        ts::return_shared(vault_u1);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault_end = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let (admin_out_a, admin_out_b) = vault::withdraw_turbos_active(
+            &mut vault_end,
+            &mut pool,
+            &mut positions,
+            admin_share,
+            1,
+            1,
+            9999999,
+            &clock,
+            &versioned,
+            ts::ctx(&mut scenario),
+        );
+        coin::burn_for_testing(admin_out_a);
+        coin::burn_for_testing(admin_out_b);
+        clock::destroy_for_testing(clock);
+        turbos_pool::destroy_versioned_for_testing(versioned);
+        turbos_pm::destroy_for_testing(positions);
+        turbos_pool::destroy_for_testing(pool);
+        ts::return_shared(vault_end);
+        ts::end(scenario);
+    }
+
+    // Negative 19: Wrong Cetus pool object is rejected on permissionless deposit (EInvalidPool)
+    #[test]
+    #[expected_failure(abort_code = blusky_vault::vault::EInvalidPool)]
+    fun test_cetus_active_deposit_wrong_pool_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let (_v_id, _a_id, op_id) = setup_vault(&mut scenario);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let op_cap = ts::take_from_sender_by_id<OperatorCap>(&scenario, op_id);
+        let seed_a = coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario));
+        let seed_b = coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario));
+        let admin_share = vault::deposit(&mut vault, seed_a, seed_b, ts::ctx(&mut scenario));
+
+        let g_cfg = cetus_config::new_for_testing(ts::ctx(&mut scenario));
+        let real_pool = cetus_pool::new_for_testing<SUI_TEST, USDC_TEST>(
+            balance::create_for_testing<SUI_TEST>(10000),
+            balance::create_for_testing<USDC_TEST>(10000),
+            ts::ctx(&mut scenario),
+        );
+        let mut spoof_pool = cetus_pool::new_for_testing<SUI_TEST, USDC_TEST>(
+            balance::create_for_testing<SUI_TEST>(10000),
+            balance::create_for_testing<USDC_TEST>(10000),
+            ts::ctx(&mut scenario),
+        );
+        let pos = cetus_position::new_for_testing(object::id(&real_pool), 20000, ts::ctx(&mut scenario));
+        vault::deposit_position(&op_cap, &mut vault, pos);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        ts::return_to_sender(&scenario, op_cap);
+        ts::return_shared(vault);
+
+        ts::next_tx(&mut scenario, USER1);
+        let mut vault_u1 = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let (s, la, lb) = vault::deposit_cetus_active(
+            &mut vault_u1,
+            &g_cfg,
+            &mut spoof_pool,
+            coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario)),
+            coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario)),
+            1000,
+            true,
+            1,
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        coin::burn_for_testing(la);
+        coin::burn_for_testing(lb);
+        let (oa, ob) = vault::withdraw(&mut vault_u1, s, ts::ctx(&mut scenario));
+        coin::burn_for_testing(oa);
+        coin::burn_for_testing(ob);
+        let (aa, ab) = vault::withdraw(&mut vault_u1, admin_share, ts::ctx(&mut scenario));
+        coin::burn_for_testing(aa);
+        coin::burn_for_testing(ab);
+        clock::destroy_for_testing(clock);
+        cetus_config::destroy_for_testing(g_cfg);
+        cetus_pool::destroy_for_testing(real_pool);
+        cetus_pool::destroy_for_testing(spoof_pool);
+        ts::return_shared(vault_u1);
+        ts::end(scenario);
+    }
+
+    // Negative 20: Slippage guard on permissionless deposit reverts cleanly (ESlippageExceeded)
+    #[test]
+    #[expected_failure(abort_code = blusky_vault::vault::ESlippageExceeded)]
+    fun test_cetus_active_deposit_slippage_fails() {
+        let mut scenario = ts::begin(ADMIN);
+        let (_v_id, _a_id, op_id) = setup_vault(&mut scenario);
+
+        ts::next_tx(&mut scenario, ADMIN);
+        let mut vault = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let op_cap = ts::take_from_sender_by_id<OperatorCap>(&scenario, op_id);
+        let seed_a = coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario));
+        let seed_b = coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario));
+        let admin_share = vault::deposit(&mut vault, seed_a, seed_b, ts::ctx(&mut scenario));
+
+        let g_cfg = cetus_config::new_for_testing(ts::ctx(&mut scenario));
+        let mut pool = cetus_pool::new_for_testing<SUI_TEST, USDC_TEST>(
+            balance::create_for_testing<SUI_TEST>(10000),
+            balance::create_for_testing<USDC_TEST>(10000),
+            ts::ctx(&mut scenario),
+        );
+        let pos = cetus_position::new_for_testing(object::id(&pool), 20000, ts::ctx(&mut scenario));
+        vault::deposit_position(&op_cap, &mut vault, pos);
+        let clock = clock::create_for_testing(ts::ctx(&mut scenario));
+
+        ts::return_to_sender(&scenario, op_cap);
+        ts::return_shared(vault);
+
+        ts::next_tx(&mut scenario, USER1);
+        let mut vault_u1 = ts::take_shared<Vault<SUI_TEST, USDC_TEST>>(&scenario);
+        let (s, la, lb) = vault::deposit_cetus_active(
+            &mut vault_u1,
+            &g_cfg,
+            &mut pool,
+            coin::mint_for_testing<SUI_TEST>(5000, ts::ctx(&mut scenario)),
+            coin::mint_for_testing<USDC_TEST>(5000, ts::ctx(&mut scenario)),
+            5000,
+            true,
+            99999999, // unattainable min_shares
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        coin::burn_for_testing(la);
+        coin::burn_for_testing(lb);
+        let (oa, ob) = vault::withdraw(&mut vault_u1, s, ts::ctx(&mut scenario));
+        coin::burn_for_testing(oa);
+        coin::burn_for_testing(ob);
+        let (aa, ab) = vault::withdraw(&mut vault_u1, admin_share, ts::ctx(&mut scenario));
+        coin::burn_for_testing(aa);
+        coin::burn_for_testing(ab);
+        clock::destroy_for_testing(clock);
+        cetus_config::destroy_for_testing(g_cfg);
+        cetus_pool::destroy_for_testing(pool);
+        ts::return_shared(vault_u1);
         ts::end(scenario);
     }
 }

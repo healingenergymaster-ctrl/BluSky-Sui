@@ -747,12 +747,6 @@ export class CetusRebalancePtbBuilder {
       ? tx.moveCall({ target: '0x2::coin::into_balance', typeArguments: [coinTypeB], arguments: [depositCoin] })
       : tx.moveCall({ target: '0x2::balance::zero', typeArguments: [coinTypeB], arguments: [] });
 
-    const [activePos, depositReceipt] = tx.moveCall({
-      target: `${vaultCallPackageId}::vault::start_deposit_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
-      arguments: [tx.object(operatorCapId), tx.object(vaultId)]
-    });
-
     this._appendFlashSwapMoves({
       tx,
       cetusCallPkg,
@@ -765,47 +759,35 @@ export class CetusRebalancePtbBuilder {
       swapPlan
     });
 
-    this._appendAddLiquidityAndRepayMoves({
-      tx,
-      cetusCallPkg,
-      globalConfigId,
-      poolId: targetPoolId,
-      coinTypeA,
-      coinTypeB,
-      pos: activePos,
-      balA,
-      balB,
-      fixAmount: swapPlan.redeployFixAmount,
-      isFixA: swapPlan.isFixA
-    });
-
-    const [leftCoinA] = tx.moveCall({
+    const [inCoinA] = tx.moveCall({
       target: '0x2::coin::from_balance',
       typeArguments: [coinTypeA],
       arguments: [balA]
     });
-    const [leftCoinB] = tx.moveCall({
+    const [inCoinB] = tx.moveCall({
       target: '0x2::coin::from_balance',
       typeArguments: [coinTypeB],
       arguments: [balB]
     });
 
-    const [newShare] = tx.moveCall({
-      target: `${vaultCallPackageId}::vault::finish_deposit_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
+    const minShares = BigInt(Math.max(1, Math.floor(Number(sharesToMint) * 0.85)));
+    const [newShare, leftCoinA, leftCoinB] = tx.moveCall({
+      target: `${vaultCallPackageId}::vault::deposit_cetus_active`,
+      typeArguments: [coinTypeA, coinTypeB],
       arguments: [
         tx.object(vaultId),
-        depositReceipt,
-        activePos,
-        leftCoinA,
-        leftCoinB,
-        tx.pure.u64(swapPlan.estimatedPostSwapA),
-        tx.pure.u64(swapPlan.estimatedPostSwapB),
-        tx.pure.u64(sharesToMint)
+        tx.object(globalConfigId),
+        tx.object(targetPoolId),
+        inCoinA,
+        inCoinB,
+        tx.pure.u64(BigInt(swapPlan.redeployFixAmount)),
+        tx.pure.bool(Boolean(swapPlan.isFixA)),
+        tx.pure.u64(minShares),
+        tx.object('0x6')
       ]
     });
 
-    tx.transferObjects([newShare], userAddress);
+    tx.transferObjects([newShare, leftCoinA, leftCoinB], userAddress);
 
     const swapUsdcAmount = swapPlan.executeOnChain ? Number(swapPlan.swapAmountRaw) / 1e6 : 0;
     const estAddedSui = isUsdcCoinB
@@ -819,6 +801,7 @@ export class CetusRebalancePtbBuilder {
       tx,
       dex: 'Cetus Protocol',
       isLiveMoveCallPtb: true,
+      requiresOperatorCosign: false,
       summary: {
         depositUsdcAmount: Number(rawDepositUsdc) / 1e6,
         swapUsdcAmount,
@@ -833,10 +816,8 @@ export class CetusRebalancePtbBuilder {
         vaultCallPackageId
       },
       steps: [
-        { step: 1, action: 'start_deposit_liquidity', target: `${vaultCallPackageId}::vault::start_deposit_liquidity`, vaultId },
-        { step: 2, action: 'flash_swap', target: `${cetusCallPkg}::pool::flash_swap`, poolId: targetPoolId, swapUsdcAmount },
-        { step: 3, action: 'add_liquidity_fix_coin', target: `${cetusCallPkg}::pool::add_liquidity_fix_coin`, poolId: targetPoolId },
-        { step: 4, action: 'finish_deposit_liquidity', target: `${vaultCallPackageId}::vault::finish_deposit_liquidity`, vaultId }
+        { step: 1, action: 'flash_swap', target: `${cetusCallPkg}::pool::flash_swap`, poolId: targetPoolId, swapUsdcAmount },
+        { step: 2, action: 'deposit_cetus_active', target: `${vaultCallPackageId}::vault::deposit_cetus_active`, vaultId }
       ],
       metadata: {
         poolId: targetPoolId,
@@ -937,53 +918,23 @@ export class CetusRebalancePtbBuilder {
       burnShareArg = splitOut;
     }
 
-    const [activePos, idleCoinA, idleCoinB, withdrawReceipt] = tx.moveCall({
-      target: `${vaultCallPackageId}::vault::start_withdraw_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
-      arguments: [tx.object(operatorCapId), tx.object(vaultId), burnShareArg]
-    });
-
-    const [remBalA, remBalB] = tx.moveCall({
-      target: `${cetusCallPkg}::pool::remove_liquidity`,
+    const minOutA = estOutA > 10000n ? (estOutA * 80n) / 100n : 0n;
+    const minOutB = estOutB > 10000n ? (estOutB * 80n) / 100n : 0n;
+    const [outCoinA, outCoinB] = tx.moveCall({
+      target: `${vaultCallPackageId}::vault::withdraw_cetus_active`,
       typeArguments: [coinTypeA, coinTypeB],
-      arguments: [tx.object(globalConfigId), tx.object(targetPoolId), activePos, tx.pure.u128(liqToRemove), tx.object('0x6')]
-    });
-
-    const [remCoinA] = tx.moveCall({
-      target: '0x2::coin::from_balance',
-      typeArguments: [coinTypeA],
-      arguments: [remBalA]
-    });
-    const [remCoinB] = tx.moveCall({
-      target: '0x2::coin::from_balance',
-      typeArguments: [coinTypeB],
-      arguments: [remBalB]
-    });
-
-    tx.moveCall({
-      target: '0x2::coin::join',
-      typeArguments: [coinTypeA],
-      arguments: [idleCoinA, remCoinA]
-    });
-    tx.moveCall({
-      target: '0x2::coin::join',
-      typeArguments: [coinTypeB],
-      arguments: [idleCoinB, remCoinB]
-    });
-
-    tx.moveCall({
-      target: `${vaultCallPackageId}::vault::finish_withdraw_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
       arguments: [
         tx.object(vaultId),
-        withdrawReceipt,
-        activePos,
-        tx.pure.u64(estOutA),
-        tx.pure.u64(estOutB)
+        tx.object(globalConfigId),
+        tx.object(targetPoolId),
+        burnShareArg,
+        tx.pure.u64(minOutA),
+        tx.pure.u64(minOutB),
+        tx.object('0x6')
       ]
     });
 
-    tx.transferObjects([idleCoinA, idleCoinB], userAddress);
+    tx.transferObjects([outCoinA, outCoinB], userAddress);
 
     const estOutUsdc = isUsdcCoinB ? Number(estOutB) / 1e6 : Number(estOutA) / 1e6;
     const estOutSui = isUsdcCoinB ? Number(estOutA) / 1e9 : Number(estOutB) / 1e9;
@@ -992,6 +943,7 @@ export class CetusRebalancePtbBuilder {
       tx,
       dex: 'Cetus Protocol',
       isLiveMoveCallPtb: true,
+      requiresOperatorCosign: false,
       summary: {
         sharesToBurn: burnBig.toString(),
         liqToRemove: liqToRemove.toString(),
@@ -1001,9 +953,7 @@ export class CetusRebalancePtbBuilder {
         vaultCallPackageId
       },
       steps: [
-        { step: 1, action: 'start_withdraw_liquidity', target: `${vaultCallPackageId}::vault::start_withdraw_liquidity`, vaultId },
-        { step: 2, action: 'remove_liquidity', target: `${cetusCallPkg}::pool::remove_liquidity`, poolId: targetPoolId, liqToRemove: liqToRemove.toString() },
-        { step: 3, action: 'finish_withdraw_liquidity', target: `${vaultCallPackageId}::vault::finish_withdraw_liquidity`, vaultId }
+        { step: 1, action: 'withdraw_cetus_active', target: `${vaultCallPackageId}::vault::withdraw_cetus_active`, vaultId, liqToRemove: liqToRemove.toString() }
       ],
       metadata: {
         poolId: targetPoolId,

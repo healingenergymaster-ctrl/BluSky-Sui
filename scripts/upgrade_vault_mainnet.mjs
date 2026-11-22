@@ -56,7 +56,7 @@ function updatePublishedMainnet(newPackageId) {
   const head = toml.slice(0, secIdx);
   let tail = toml.slice(secIdx);
   tail = tail.replace(/published-at = "[^"]+"/, `published-at = "${newPackageId}"`);
-  tail = tail.replace(/version = \d+/, 'version = 2');
+  tail = tail.replace(/version = (\d+)/, (_, v) => `version = ${Number(v) + 1}`);
   fs.writeFileSync(publishedTomlPath, head + tail, 'utf8');
 }
 
@@ -75,9 +75,9 @@ async function main() {
     throw new Error('VAULT_PACKAGE_ID and VAULT_UPGRADE_CAP must be set in .env');
   }
 
-  console.log(`🔨 Compiling blusky_vault v3 bytecode...`);
+  console.log(`🔨 Compiling blusky_vault bytecode for Mainnet...`);
   const suiCli = getSuiCli();
-  const buildOut = execSync(`"${suiCli}" move build --dump-bytecode-as-base64 --path move`, {
+  const buildOut = execSync(`"${suiCli}" move --client.env mainnet build --build-env mainnet --dump-bytecode-as-base64 --path move`, {
     cwd: rootDir,
     encoding: 'utf8'
   });

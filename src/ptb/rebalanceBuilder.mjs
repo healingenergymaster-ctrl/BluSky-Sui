@@ -503,12 +503,6 @@ export class RebalancePtbBuilder {
     const coinA = isUsdcCoinB ? zeroOther : depositCoin;
     const coinB = isUsdcCoinB ? depositCoin : zeroOther;
 
-    const [activePos, depositReceipt] = tx.moveCall({
-      target: `${vaultCallPackageId}::vault::start_deposit_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
-      arguments: [tx.object(operatorCapId), tx.object(vaultId)]
-    });
-
     this._appendTurbosSwapMoves({
       tx,
       pkg: turbosPkg,
@@ -526,41 +520,26 @@ export class RebalancePtbBuilder {
     const [valA] = tx.moveCall({ target: '0x2::coin::value', typeArguments: [coinTypeA], arguments: [coinA] });
     const [valB] = tx.moveCall({ target: '0x2::coin::value', typeArguments: [coinTypeB], arguments: [coinB] });
 
-    const [leftCoinA, leftCoinB] = tx.moveCall({
-      target: `${turbosPkg}::position_manager::increase_liquidity_with_return_`,
+    const minShares = BigInt(Math.max(1, Math.floor(Number(sharesToMint) * 0.85)));
+    const [newShare, leftCoinA, leftCoinB] = tx.moveCall({
+      target: `${vaultCallPackageId}::vault::deposit_turbos_active`,
       typeArguments: [coinTypeA, coinTypeB, feeType],
       arguments: [
+        tx.object(vaultId),
         tx.object(targetPoolId),
         tx.object(this.contracts.Positions),
-        this._appendCoinVec(tx, coinTypeA, coinA),
-        this._appendCoinVec(tx, coinTypeB, coinB),
-        activePos,
+        coinA,
+        coinB,
         valA,
         valB,
-        tx.pure.u64(0n),
-        tx.pure.u64(0n),
+        tx.pure.u64(minShares),
         tx.pure.u64(deadline),
         tx.object('0x6'),
         tx.object(this.contracts.Versioned)
       ]
     });
 
-    const [newShare] = tx.moveCall({
-      target: `${vaultCallPackageId}::vault::finish_deposit_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
-      arguments: [
-        tx.object(vaultId),
-        depositReceipt,
-        activePos,
-        leftCoinA,
-        leftCoinB,
-        tx.pure.u64(swapPlan.estimatedPostSwapA),
-        tx.pure.u64(swapPlan.estimatedPostSwapB),
-        tx.pure.u64(sharesToMint)
-      ]
-    });
-
-    tx.transferObjects([newShare], userAddress);
+    tx.transferObjects([newShare, leftCoinA, leftCoinB], userAddress);
 
     const swapUsdcAmount = swapPlan.executeOnChain ? Number(swapPlan.swapAmountRaw) / 1e6 : 0;
     const estAddedSui = isUsdcCoinB
@@ -574,6 +553,7 @@ export class RebalancePtbBuilder {
       tx,
       dex: 'Turbos Finance',
       isLiveMoveCallPtb: true,
+      requiresOperatorCosign: false,
       summary: {
         depositUsdcAmount: Number(rawDepositUsdc) / 1e6,
         swapUsdcAmount,
@@ -588,10 +568,8 @@ export class RebalancePtbBuilder {
         vaultCallPackageId
       },
       steps: [
-        { step: 1, action: 'start_deposit_liquidity', target: `${vaultCallPackageId}::vault::start_deposit_liquidity`, vaultId },
-        { step: 2, action: 'turbos_swap', target: `${turbosPkg}::swap_router`, poolId: targetPoolId, swapUsdcAmount },
-        { step: 3, action: 'increase_liquidity_with_return_', target: `${turbosPkg}::position_manager::increase_liquidity_with_return_`, poolId: targetPoolId },
-        { step: 4, action: 'finish_deposit_liquidity', target: `${vaultCallPackageId}::vault::finish_deposit_liquidity`, vaultId }
+        { step: 1, action: 'turbos_swap', target: `${turbosPkg}::swap_router`, poolId: targetPoolId, swapUsdcAmount },
+        { step: 2, action: 'deposit_turbos_active', target: `${vaultCallPackageId}::vault::deposit_turbos_active`, vaultId }
       ],
       metadata: {
         poolId: targetPoolId,
@@ -689,45 +667,26 @@ export class RebalancePtbBuilder {
       burnShareArg = splitOut;
     }
 
-    const [activePos, idleCoinA, idleCoinB, withdrawReceipt] = tx.moveCall({
-      target: `${vaultCallPackageId}::vault::start_withdraw_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
-      arguments: [tx.object(operatorCapId), tx.object(vaultId), burnShareArg]
-    });
-
     const deadline = BigInt(Date.now() + 180_000);
-    const [remCoinA, remCoinB] = tx.moveCall({
-      target: `${turbosPkg}::position_manager::decrease_liquidity_with_return_`,
+    const minOutA = estOutA > 10000n ? (estOutA * 80n) / 100n : 0n;
+    const minOutB = estOutB > 10000n ? (estOutB * 80n) / 100n : 0n;
+    const [outCoinA, outCoinB] = tx.moveCall({
+      target: `${vaultCallPackageId}::vault::withdraw_turbos_active`,
       typeArguments: [coinTypeA, coinTypeB, feeType],
       arguments: [
+        tx.object(vaultId),
         tx.object(targetPoolId),
         tx.object(this.contracts.Positions),
-        activePos,
-        tx.pure.u128(liqToRemove),
-        tx.pure.u64(0n),
-        tx.pure.u64(0n),
+        burnShareArg,
+        tx.pure.u64(minOutA),
+        tx.pure.u64(minOutB),
         tx.pure.u64(deadline),
         tx.object('0x6'),
         tx.object(this.contracts.Versioned)
       ]
     });
 
-    tx.moveCall({ target: '0x2::coin::join', typeArguments: [coinTypeA], arguments: [idleCoinA, remCoinA] });
-    tx.moveCall({ target: '0x2::coin::join', typeArguments: [coinTypeB], arguments: [idleCoinB, remCoinB] });
-
-    tx.moveCall({
-      target: `${vaultCallPackageId}::vault::finish_withdraw_liquidity`,
-      typeArguments: [coinTypeA, coinTypeB, positionType],
-      arguments: [
-        tx.object(vaultId),
-        withdrawReceipt,
-        activePos,
-        tx.pure.u64(estOutA),
-        tx.pure.u64(estOutB)
-      ]
-    });
-
-    tx.transferObjects([idleCoinA, idleCoinB], userAddress);
+    tx.transferObjects([outCoinA, outCoinB], userAddress);
 
     const estOutUsdc = isUsdcCoinB ? Number(estOutB) / 1e6 : Number(estOutA) / 1e6;
     const estOutSui = isUsdcCoinB ? Number(estOutA) / 1e9 : Number(estOutB) / 1e9;
@@ -736,6 +695,7 @@ export class RebalancePtbBuilder {
       tx,
       dex: 'Turbos Finance',
       isLiveMoveCallPtb: true,
+      requiresOperatorCosign: false,
       summary: {
         sharesToBurn: burnBig.toString(),
         liqToRemove: liqToRemove.toString(),
@@ -745,9 +705,7 @@ export class RebalancePtbBuilder {
         vaultCallPackageId
       },
       steps: [
-        { step: 1, action: 'start_withdraw_liquidity', target: `${vaultCallPackageId}::vault::start_withdraw_liquidity`, vaultId },
-        { step: 2, action: 'decrease_liquidity_with_return_', target: `${turbosPkg}::position_manager::decrease_liquidity_with_return_`, poolId: targetPoolId, liqToRemove: liqToRemove.toString() },
-        { step: 3, action: 'finish_withdraw_liquidity', target: `${vaultCallPackageId}::vault::finish_withdraw_liquidity`, vaultId }
+        { step: 1, action: 'withdraw_turbos_active', target: `${vaultCallPackageId}::vault::withdraw_turbos_active`, vaultId, liqToRemove: liqToRemove.toString() }
       ],
       metadata: {
         poolId: targetPoolId,

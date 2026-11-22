@@ -3,6 +3,8 @@ name = "blusky_vault"
 edition = "2024.beta"
 
 [dependencies]
+cetusclmm = { local = "vendor/cetus_clmm" }
+TurbosCLMM = { local = "vendor/turbos_clmm" }
 
 [addresses]
 blusky_vault = "0x0"

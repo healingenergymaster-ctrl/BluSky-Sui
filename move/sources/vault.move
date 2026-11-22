@@ -3,9 +3,16 @@
 
 module blusky_vault::vault {
     use sui::balance::{Self, Balance};
+    use sui::clock::Clock;
     use sui::coin::{Self, Coin};
     use sui::dynamic_object_field as dof;
     use sui::event;
+    use cetusclmm::config::GlobalConfig as CetusGlobalConfig;
+    use cetusclmm::pool::{Self as cetus_pool, Pool as CetusPool};
+    use cetusclmm::position::{Self as cetus_position, Position as CetusPosition};
+    use turbos_clmm::pool::{Pool as TurbosPool, Versioned as TurbosVersioned};
+    use turbos_clmm::position_manager::{Self as turbos_pm, Positions as TurbosPositions};
+    use turbos_clmm::position_nft::{Self as turbos_nft, TurbosPositionNFT};
 
     // --- Events ---
     public struct DepositEvent has copy, drop {
@@ -70,6 +77,8 @@ module blusky_vault::vault {
     const EPositionAlreadyExists: u64 = 11;
     const EInvalidReceipt: u64 = 12;
     const EInsufficientLiquidity: u64 = 13;
+    const EInvalidPool: u64 = 14;
+    const ESlippageExceeded: u64 = 15;
 
     // --- Constants ---
     const MAX_FEE_BPS: u64 = 2500; // Maximum allowed performance fee: 25.0%
@@ -639,6 +648,297 @@ module blusky_vault::vault {
         });
     }
 
+    // --- Permissionless Active-LP Deposit & Withdraw (On-Chain Liquidity Invariants) ---
+
+    /// Permissionlessly deposits CoinA/CoinB directly into the vault's active Cetus CLMM Position
+    /// without transferring custody of the Position NFT or requiring OperatorCap.
+    /// Computes minted shares strictly from on-chain Cetus Position liquidity delta (`delta_liq / liq_before`).
+    public fun deposit_cetus_active<CoinA, CoinB>(
+        vault: &mut Vault<CoinA, CoinB>,
+        config: &CetusGlobalConfig,
+        pool: &mut CetusPool<CoinA, CoinB>,
+        coin_a: Coin<CoinA>,
+        coin_b: Coin<CoinB>,
+        fix_amount: u64,
+        fix_amount_a: bool,
+        min_shares: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): (VaultShare<CoinA, CoinB>, Coin<CoinA>, Coin<CoinB>) {
+        assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
+        assert!(vault.total_shares > 0, EInsufficientLiquidity);
+        assert!(fix_amount > 0, EZeroDeposit);
+
+        let pos = dof::borrow_mut<PositionKey, CetusPosition>(&mut vault.id, PositionKey {});
+        assert!(object::id(pool) == cetus_position::pool_id(pos), EInvalidPool);
+
+        let liq_before = cetus_position::liquidity(pos);
+        assert!(liq_before > 0, EInsufficientLiquidity);
+
+        let mut bal_a = coin::into_balance(coin_a);
+        let mut bal_b = coin::into_balance(coin_b);
+
+        let add_receipt = cetus_pool::add_liquidity_fix_coin(
+            config,
+            pool,
+            pos,
+            fix_amount,
+            fix_amount_a,
+            clock
+        );
+        let (pay_a, pay_b) = cetus_pool::add_liquidity_pay_amount(&add_receipt);
+        let pay_bal_a = balance::split(&mut bal_a, pay_a);
+        let pay_bal_b = balance::split(&mut bal_b, pay_b);
+        cetus_pool::repay_add_liquidity(config, pool, pay_bal_a, pay_bal_b, add_receipt);
+
+        let liq_after = cetus_position::liquidity(pos);
+        assert!(liq_after > liq_before, EZeroDeposit);
+        let delta_liq = liq_after - liq_before;
+
+        let shares_to_mint = ((delta_liq * (vault.total_shares as u128)) / liq_before) as u64;
+        assert!(shares_to_mint > 0, EZeroShares);
+        assert!(shares_to_mint >= min_shares, ESlippageExceeded);
+
+        vault.total_shares = vault.total_shares + shares_to_mint;
+        let vault_id = object::uid_to_inner(&vault.id);
+
+        event::emit(DepositEvent {
+            vault_id,
+            depositor: tx_context::sender(ctx),
+            shares_minted: shares_to_mint,
+            amount_a: pay_a,
+            amount_b: pay_b,
+        });
+
+        let share = VaultShare<CoinA, CoinB> {
+            id: object::new(ctx),
+            vault_id,
+            shares: shares_to_mint,
+        };
+        (share, coin::from_balance(bal_a, ctx), coin::from_balance(bal_b, ctx))
+    }
+
+    /// Permissionlessly redeems a user's VaultShare against the vault's active Cetus Position
+    /// without requiring OperatorCap. Only the VaultShare owner can authorize the burn.
+    public fun withdraw_cetus_active<CoinA, CoinB>(
+        vault: &mut Vault<CoinA, CoinB>,
+        config: &CetusGlobalConfig,
+        pool: &mut CetusPool<CoinA, CoinB>,
+        share: VaultShare<CoinA, CoinB>,
+        min_amount_a: u64,
+        min_amount_b: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ): (Coin<CoinA>, Coin<CoinB>) {
+        assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
+
+        let VaultShare { id, vault_id: share_vault_id, shares } = share;
+        object::delete(id);
+
+        let v_id = object::uid_to_inner(&vault.id);
+        assert!(share_vault_id == v_id, EInvalidShareVault);
+        assert!(shares > 0, EZeroShares);
+        assert!(vault.total_shares > shares, EInsufficientShares);
+
+        let total_shares_before = vault.total_shares;
+        let total_a = balance::value(&vault.balance_a);
+        let total_b = balance::value(&vault.balance_b);
+        let idle_out_a = (((shares as u128) * (total_a as u128)) / (total_shares_before as u128)) as u64;
+        let idle_out_b = (((shares as u128) * (total_b as u128)) / (total_shares_before as u128)) as u64;
+
+        let pos = dof::borrow_mut<PositionKey, CetusPosition>(&mut vault.id, PositionKey {});
+        assert!(object::id(pool) == cetus_position::pool_id(pos), EInvalidPool);
+
+        let liq_before = cetus_position::liquidity(pos);
+        assert!(liq_before > 0, EInsufficientLiquidity);
+        let liq_to_remove = ((shares as u128) * liq_before) / (total_shares_before as u128);
+        assert!(liq_to_remove > 0, EInsufficientLiquidity);
+
+        let (rem_bal_a, rem_bal_b) = cetus_pool::remove_liquidity(
+            config,
+            pool,
+            pos,
+            liq_to_remove,
+            clock
+        );
+
+        vault.total_shares = total_shares_before - shares;
+
+        let mut out_bal_a = balance::split(&mut vault.balance_a, idle_out_a);
+        let mut out_bal_b = balance::split(&mut vault.balance_b, idle_out_b);
+        balance::join(&mut out_bal_a, rem_bal_a);
+        balance::join(&mut out_bal_b, rem_bal_b);
+
+        let total_out_a = balance::value(&out_bal_a);
+        let total_out_b = balance::value(&out_bal_b);
+        assert!(total_out_a >= min_amount_a && total_out_b >= min_amount_b, ESlippageExceeded);
+
+        event::emit(WithdrawEvent {
+            vault_id: v_id,
+            withdrawer: tx_context::sender(ctx),
+            shares_burned: shares,
+            amount_a_returned: total_out_a,
+            amount_b_returned: total_out_b,
+        });
+
+        (coin::from_balance(out_bal_a, ctx), coin::from_balance(out_bal_b, ctx))
+    }
+
+    /// Permissionlessly deposits CoinA/CoinB directly into the vault's active Turbos CLMM Position
+    /// without transferring custody of the NFT or requiring OperatorCap.
+    public fun deposit_turbos_active<CoinA, CoinB, FeeType>(
+        vault: &mut Vault<CoinA, CoinB>,
+        pool: &mut TurbosPool<CoinA, CoinB, FeeType>,
+        positions: &mut TurbosPositions,
+        coin_a: Coin<CoinA>,
+        coin_b: Coin<CoinB>,
+        amount_a_desired: u64,
+        amount_b_desired: u64,
+        min_shares: u64,
+        deadline: u64,
+        clock: &Clock,
+        versioned: &TurbosVersioned,
+        ctx: &mut TxContext
+    ): (VaultShare<CoinA, CoinB>, Coin<CoinA>, Coin<CoinB>) {
+        assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
+        assert!(vault.total_shares > 0, EInsufficientLiquidity);
+
+        let in_a_val = coin::value(&coin_a);
+        let in_b_val = coin::value(&coin_b);
+        assert!(in_a_val > 0 || in_b_val > 0, EZeroDeposit);
+
+        let nft = dof::borrow_mut<PositionKey, TurbosPositionNFT>(&mut vault.id, PositionKey {});
+        assert!(object::id(pool) == turbos_nft::pool_id(nft), EInvalidPool);
+
+        let nft_addr = object::id_to_address(&object::id(nft));
+        let (_, _, liq_before) = turbos_pm::get_position_info(positions, nft_addr);
+        assert!(liq_before > 0, EInsufficientLiquidity);
+
+        let (left_a, left_b) = turbos_pm::increase_liquidity_with_return_(
+            pool,
+            positions,
+            vector[coin_a],
+            vector[coin_b],
+            nft,
+            amount_a_desired,
+            amount_b_desired,
+            0,
+            0,
+            deadline,
+            clock,
+            versioned,
+            ctx
+        );
+
+        let (_, _, liq_after) = turbos_pm::get_position_info(positions, nft_addr);
+        assert!(liq_after > liq_before, EZeroDeposit);
+        let delta_liq = liq_after - liq_before;
+
+        let shares_to_mint = ((delta_liq * (vault.total_shares as u128)) / liq_before) as u64;
+        assert!(shares_to_mint > 0, EZeroShares);
+        assert!(shares_to_mint >= min_shares, ESlippageExceeded);
+
+        vault.total_shares = vault.total_shares + shares_to_mint;
+        let vault_id = object::uid_to_inner(&vault.id);
+        let left_a_val = coin::value(&left_a);
+        let left_b_val = coin::value(&left_b);
+        let used_a = if (in_a_val >= left_a_val) { in_a_val - left_a_val } else { 0 };
+        let used_b = if (in_b_val >= left_b_val) { in_b_val - left_b_val } else { 0 };
+
+        event::emit(DepositEvent {
+            vault_id,
+            depositor: tx_context::sender(ctx),
+            shares_minted: shares_to_mint,
+            amount_a: used_a,
+            amount_b: used_b,
+        });
+
+        let share = VaultShare<CoinA, CoinB> {
+            id: object::new(ctx),
+            vault_id,
+            shares: shares_to_mint,
+        };
+        (share, left_a, left_b)
+    }
+
+    /// Permissionlessly redeems a user's VaultShare against the vault's active Turbos Position
+    /// without requiring OperatorCap. Only the VaultShare owner can authorize the burn.
+    public fun withdraw_turbos_active<CoinA, CoinB, FeeType>(
+        vault: &mut Vault<CoinA, CoinB>,
+        pool: &mut TurbosPool<CoinA, CoinB, FeeType>,
+        positions: &mut TurbosPositions,
+        share: VaultShare<CoinA, CoinB>,
+        min_amount_a: u64,
+        min_amount_b: u64,
+        deadline: u64,
+        clock: &Clock,
+        versioned: &TurbosVersioned,
+        ctx: &mut TxContext
+    ): (Coin<CoinA>, Coin<CoinB>) {
+        assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
+
+        let VaultShare { id, vault_id: share_vault_id, shares } = share;
+        object::delete(id);
+
+        let v_id = object::uid_to_inner(&vault.id);
+        assert!(share_vault_id == v_id, EInvalidShareVault);
+        assert!(shares > 0, EZeroShares);
+        assert!(vault.total_shares > shares, EInsufficientShares);
+
+        let total_shares_before = vault.total_shares;
+        let total_a = balance::value(&vault.balance_a);
+        let total_b = balance::value(&vault.balance_b);
+        let idle_out_a = (((shares as u128) * (total_a as u128)) / (total_shares_before as u128)) as u64;
+        let idle_out_b = (((shares as u128) * (total_b as u128)) / (total_shares_before as u128)) as u64;
+
+        let nft = dof::borrow_mut<PositionKey, TurbosPositionNFT>(&mut vault.id, PositionKey {});
+        assert!(object::id(pool) == turbos_nft::pool_id(nft), EInvalidPool);
+
+        let nft_addr = object::id_to_address(&object::id(nft));
+        let (_, _, liq_before) = turbos_pm::get_position_info(positions, nft_addr);
+        assert!(liq_before > 0, EInsufficientLiquidity);
+        let liq_to_remove = ((shares as u128) * liq_before) / (total_shares_before as u128);
+        assert!(liq_to_remove > 0, EInsufficientLiquidity);
+
+        let (mut rem_coin_a, mut rem_coin_b) = turbos_pm::decrease_liquidity_with_return_(
+            pool,
+            positions,
+            nft,
+            liq_to_remove,
+            0,
+            0,
+            deadline,
+            clock,
+            versioned,
+            ctx
+        );
+
+        vault.total_shares = total_shares_before - shares;
+
+        let idle_coin_a = coin::take(&mut vault.balance_a, idle_out_a, ctx);
+        let idle_coin_b = coin::take(&mut vault.balance_b, idle_out_b, ctx);
+        coin::join(&mut rem_coin_a, idle_coin_a);
+        coin::join(&mut rem_coin_b, idle_coin_b);
+
+        let total_out_a = coin::value(&rem_coin_a);
+        let total_out_b = coin::value(&rem_coin_b);
+        assert!(total_out_a >= min_amount_a && total_out_b >= min_amount_b, ESlippageExceeded);
+
+        event::emit(WithdrawEvent {
+            vault_id: v_id,
+            withdrawer: tx_context::sender(ctx),
+            shares_burned: shares,
+            amount_a_returned: total_out_a,
+            amount_b_returned: total_out_b,
+        });
+
+        (rem_coin_a, rem_coin_b)
+    }
+
     // --- Admin Setters ---
 
     public fun set_fee_rate<CoinA, CoinB>(
@@ -761,4 +1061,8 @@ module blusky_vault::vault {
     public fun err_invalid_receipt(): u64 { EInvalidReceipt }
     #[test_only]
     public fun err_insufficient_liquidity(): u64 { EInsufficientLiquidity }
+    #[test_only]
+    public fun err_invalid_pool(): u64 { EInvalidPool }
+    #[test_only]
+    public fun err_slippage_exceeded(): u64 { ESlippageExceeded }
 }

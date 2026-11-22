@@ -131,7 +131,7 @@ async function prepareLivePtbResponse({ ptbResult, action, userAddress }) {
   const summary = {
     ...ptbResult.summary,
     estGasSui: Math.max(0, netGasMist) / 1e9,
-    requiresOperatorCosign: Boolean(operatorAddress && userAddress.toLowerCase() !== operatorAddress.toLowerCase())
+    requiresOperatorCosign: Boolean(ptbResult?.requiresOperatorCosign)
   };
 
   storePreparedTx({ action, userAddress, bytesBase64, summary });
@@ -147,13 +147,11 @@ async function executeSignedLivePtb({ bytesBase64, signature, userAddress, expec
 
   const key = hashBytesBase64(bytesBase64);
   const pending = pendingPreparedTxs.get(key);
-  const isSameOperator = Boolean(operatorAddress && userAddress.toLowerCase() === operatorAddress.toLowerCase());
-
   const txBytes = fromBase64(bytesBase64);
   const signatures = [signature];
 
-  if (!isSameOperator) {
-    if (!pending || pending.action !== expectedAction || pending.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
+  if (pending?.summary?.requiresOperatorCosign) {
+    if (pending.action !== expectedAction || pending.userAddress.toLowerCase() !== userAddress.toLowerCase()) {
       throw new Error('Transaction mismatch or expired preparation; please re-prepare before signing');
     }
     if (!operatorWallet.isConfigured()) {
