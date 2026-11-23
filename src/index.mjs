@@ -27,7 +27,9 @@ function renderAsciiRangeBar(progressPct, width = 30) {
 }
 
 function displayDashboard(analysis, record, hedgeReport) {
-  console.clear();
+  if (process.stdout.isTTY) {
+    console.clear();
+  }
   console.log('╔════════════════════════════════════════════════════════════════════════════╗');
   console.log('║           🌊 BLUSKY-SUI : AUTONOMOUS CLMM & DELTA-NEUTRAL VAULTS           ║');
   console.log('║        Concentrated Liquidity Rebalancing + Bluefin Perps Hedging          ║');

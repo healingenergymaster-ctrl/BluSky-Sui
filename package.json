@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.mjs",
+    "start:prod": "node src/start_production.mjs",
     "web": "node src/server.mjs",
     "server": "node src/server.mjs",
     "monitor": "node src/index.mjs",
@@ -27,5 +28,8 @@
     "dotenv": "^16.4.5",
     "tslib": "^2.9.1",
     "turbos-clmm-sdk": "^4.0.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

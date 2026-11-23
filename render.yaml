@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: blusky-sui
+    runtime: node
+    region: singapore
+    plan: starter
+    branch: master
+    buildCommand: npm install --ignore-scripts
+    startCommand: npm run start:prod
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: 24.14.0
+      - key: BLUEFIN_SDK_HTTP_VERSION
+        value: "1"
+      - key: SUI_NETWORK
+        value: mainnet
+      - key: EXECUTION_MODE
+        value: LIVE
+      - key: HEDGING_ENABLED
+        value: "true"
+      - key: SUI_PRIVATE_KEY
+        sync: false
+      - key: VAULT_PACKAGE_ID
+        sync: false
+      - key: VAULT_CALL_PACKAGE_ID
+        sync: false
+      - key: VAULT_UPGRADE_CAP
+        sync: false
+      - key: CETUS005_VAULT_OBJECT_ID
+        sync: false
+      - key: CETUS005_VAULT_OPERATOR_CAP
+        sync: false
+      - key: CETUS005_VAULT_ADMIN_CAP
+        sync: false
+      - key: TURBOS005_VAULT_OBJECT_ID
+        sync: false
+      - key: TURBOS005_VAULT_OPERATOR_CAP
+        sync: false
+      - key: TURBOS005_VAULT_ADMIN_CAP
+        sync: false
