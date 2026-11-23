@@ -4,11 +4,12 @@
 
 import { spawn } from 'child_process';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
+const SUI_COMPAT_HOOK = pathToFileURL(path.join(ROOT_DIR, 'src', 'compat', 'suiClientHook.mjs')).href;
 
 let shuttingDown = false;
 let pendingExitCode = 0;
@@ -23,7 +24,7 @@ function maybeFinishShutdown() {
 }
 
 function spawnService(name, scriptRelPath) {
-  const proc = spawn(process.execPath, [path.join(ROOT_DIR, scriptRelPath)], {
+  const proc = spawn(process.execPath, ['--import', SUI_COMPAT_HOOK, path.join(ROOT_DIR, scriptRelPath)], {
     cwd: ROOT_DIR,
     stdio: 'inherit',
     env: process.env
