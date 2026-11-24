@@ -1179,6 +1179,10 @@
     // State
     let currentWallet = null; // { address, isDemo, walletName, canSign }
     let selectedVaultKey = new URLSearchParams(window.location.search).get('vault') || localStorage.getItem('blusky_selected_vault') || '';
+    if (selectedVaultKey === 'cetus025') {
+      selectedVaultKey = 'cetus005';
+      localStorage.setItem('blusky_selected_vault', 'cetus005');
+    }
     let currentNetApyRate = 1.076;
     let currentSharePrice = 1.0000;
     let currentSpotPrice = 0.8950;

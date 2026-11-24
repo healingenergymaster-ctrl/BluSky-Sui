@@ -72,13 +72,10 @@ export class VaultApiService {
     );
 
     const turbosPoolId = catalog.turbos005.poolId;
-    const cetusPoolId = resolvedVault.dex === 'cetus' ? resolvedVault.poolId : catalog.cetus005.poolId;
+    const cetusPoolId = catalog.cetus005.poolId;
     const cetusTightPoolId = catalog.cetus005.poolId;
-    const cetusLegacyPoolId = catalog.cetus025.poolId;
-    const cachedLegacy = this.vaultApyCache.get('cetus025');
-    const needLegacyFetch = cetusPoolId !== cetusLegacyPoolId && (!cachedLegacy || Date.now() - cachedLegacy.ts > 120_000);
 
-    const [vaultState, turbosApr, liveFunding, cetusAnalysis, cetusTightAnalysis, cetusLegacyAnalysis] = await Promise.all([
+    const [vaultState, turbosApr, liveFunding, cetusAnalysis] = await Promise.all([
       vaultSnapshot
         ? Promise.resolve(null)
         : this.vaultService.getVaultMetrics(resolvedVault.objectId || '0x_blusky_sui_usdc_vault', currentPrice),
@@ -94,28 +91,10 @@ export class VaultApiService {
             vaultSnapshot?.position?.upperTick ?? activeBand.upperTick,
             vaultSnapshot?.positionNftId || '0x_cetus_active_vault_position',
             currentPrice
-          ),
-      cetusPoolId === cetusTightPoolId
-        ? Promise.resolve(null)
-        : defaultCetusService.analyzePosition(
-            cetusTightPoolId,
-            activeBand.lowerTick,
-            activeBand.upperTick,
-            '0x_cetus_005_benchmark',
-            currentPrice
-          ).catch(() => null),
-      needLegacyFetch
-        ? defaultCetusService.analyzePosition(
-            cetusLegacyPoolId,
-            activeBand.lowerTick,
-            activeBand.upperTick,
-            '0x_cetus_025_benchmark',
-            currentPrice
-          ).catch(() => null)
-        : Promise.resolve(null)
+          )
     ]);
 
-    const cetusEffectiveTight = cetusPoolId === cetusTightPoolId ? cetusAnalysis : cetusTightAnalysis;
+    const cetusEffectiveTight = cetusAnalysis;
     const turbosPoolStats = turbosApr.poolStats || {};
 
     const rawTvlUsd = vaultSnapshot
@@ -158,17 +137,6 @@ export class VaultApiService {
     this.vaultApyCache.set('cetus005', { grossApr: cetus005Gross, ts: Date.now() });
     this.vaultApyCache.set('turbos005', { grossApr: turbosGrossApr, ts: Date.now() });
 
-    let cetus025Gross = null;
-    if (cetusPoolId === cetusLegacyPoolId) {
-      cetus025Gross = cetusGrossApr;
-      this.vaultApyCache.set('cetus025', { grossApr: cetus025Gross, ts: Date.now() });
-    } else if (cetusLegacyAnalysis?.metrics?.grossApr !== undefined) {
-      cetus025Gross = cetusLegacyAnalysis.metrics.grossApr;
-      this.vaultApyCache.set('cetus025', { grossApr: cetus025Gross, ts: Date.now() });
-    } else if (cachedLegacy) {
-      cetus025Gross = cachedLegacy.grossApr;
-    }
-
     const availableVaults = [
       {
         key: 'cetus005',
@@ -195,19 +163,6 @@ export class VaultApiService {
         deployed: Boolean(catalog.turbos005.objectId),
         grossApr: turbosGrossApr,
         netApy: calcNet(turbosGrossApr)
-      },
-      {
-        key: 'cetus025',
-        label: catalog.cetus025.label,
-        shortLabel: catalog.cetus025.shortLabel,
-        dex: 'cetus',
-        dexName: 'Cetus Protocol',
-        feeTier: '0.25%',
-        objectId: catalog.cetus025.objectId,
-        poolId: catalog.cetus025.poolId,
-        deployed: Boolean(catalog.cetus025.objectId),
-        grossApr: cetus025Gross,
-        netApy: cetus025Gross !== null && cetus025Gross !== undefined ? calcNet(cetus025Gross) : null
       }
     ];
 

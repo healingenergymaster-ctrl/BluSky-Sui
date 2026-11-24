@@ -66,7 +66,7 @@ export class HedgingEngine {
   }
 
   /**
-   * Evaluates combined spot SUI exposure across multiple live vaults (e.g., cetus005, turbos005, cetus025)
+   * Evaluates combined spot SUI exposure across multiple live vaults (e.g., cetus005, turbos005)
    * against the operator's Bluefin Pro short position.
    */
   async evaluateMultiVaultHedge(vaultEvaluations = [], simulatedPrice = null, options = {}) {

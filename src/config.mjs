@@ -51,7 +51,7 @@ export const SUI_CONFIG = {
     upgradeCap: process.env.VAULT_UPGRADE_CAP || '0x23a6d43eaffc2f1156f749d42e2b5610d8a3cd7de6bc1026706ec32240cff16f'
   },
 
-  defaultVaultKey: process.env.DEFAULT_VAULT_KEY || (process.env.CETUS005_VAULT_OBJECT_ID ? 'cetus005' : (process.env.TURBOS005_VAULT_OBJECT_ID ? 'turbos005' : 'cetus025')),
+  defaultVaultKey: process.env.DEFAULT_VAULT_KEY || (process.env.CETUS005_VAULT_OBJECT_ID ? 'cetus005' : (process.env.TURBOS005_VAULT_OBJECT_ID ? 'turbos005' : 'cetus005')),
 
   // Known Core Objects & Coins (Testnet vs Mainnet)
   coins: {
@@ -148,23 +148,6 @@ export function getVaultCatalog(config = SUI_CONFIG) {
       objectId: process.env.TURBOS005_VAULT_OBJECT_ID || '',
       adminCap: process.env.TURBOS005_VAULT_ADMIN_CAP || '',
       operatorCap: process.env.TURBOS005_VAULT_OPERATOR_CAP || ''
-    },
-    cetus025: {
-      key: 'cetus025',
-      label: 'Cetus 0.25% SUI/USDC (Legacy)',
-      shortLabel: 'Cetus 0.25%',
-      dex: 'cetus',
-      dexName: 'Cetus Protocol',
-      feeTier: '0.25%',
-      feeRateBps: 2500,
-      tickSpacing: 60,
-      isCoinASui: false,
-      poolId: config.pools.cetus_sui_usdc,
-      packageId: pkg,
-      callPackageId: callPkg,
-      objectId: config.vault.objectId || '',
-      adminCap: config.vault.adminCap || '',
-      operatorCap: config.vault.operatorCap || ''
     }
   };
 }
@@ -181,6 +164,6 @@ export function resolveVaultConfig(vaultKeyOrId = null, config = SUI_CONFIG) {
     if (byId) return byId;
   }
   const preferredKey = process.env.DEFAULT_VAULT_KEY
-    || (catalog.cetus005.objectId ? 'cetus005' : (catalog.turbos005.objectId ? 'turbos005' : 'cetus025'));
-  return catalog[preferredKey] || catalog.cetus025;
+    || (catalog.cetus005.objectId ? 'cetus005' : (catalog.turbos005.objectId ? 'turbos005' : 'cetus005'));
+  return catalog[preferredKey] || catalog.cetus005;
 }
