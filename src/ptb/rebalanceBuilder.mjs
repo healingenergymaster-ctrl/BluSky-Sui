@@ -64,7 +64,8 @@ export class RebalancePtbBuilder {
     if (amtRaw <= 0n) return;
 
     const a2b = typeof swapPlan.a2b === 'boolean' ? swapPlan.a2b : swapPlan.swapDirection === 'A_TO_B';
-    const sqrtLimit = BigInt(a2b ? '4295048016' : '79226673515401279992447579055');
+    const sqrtLimit = BigInt(swapPlan.sqrtPriceLimit || (a2b ? '4295048016' : '79226673515401279992447579055'));
+    const minOutRaw = BigInt(swapPlan.minSwapOutRaw || 0n);
     const deadline = BigInt(Date.now() + 180_000);
     const inCoinType = a2b ? coinTypeA : coinTypeB;
 
@@ -82,7 +83,7 @@ export class RebalancePtbBuilder {
         tx.object(poolId),
         this._appendCoinVec(tx, inCoinType, swapInCoin),
         tx.pure.u64(amtRaw),
-        tx.pure.u64(0n),
+        tx.pure.u64(minOutRaw),
         tx.pure.u128(sqrtLimit),
         tx.pure.bool(true),
         tx.pure.address(recipient),
@@ -289,6 +290,16 @@ export class RebalancePtbBuilder {
 
       const liqBig = BigInt(positionLiquidity || 0);
       if (liqBig > 0n) {
+        const [posAddr] = tx.moveCall({
+          target: '0x2::object::id_address',
+          typeArguments: [positionType],
+          arguments: [oldPos]
+        });
+        const [, , livePosLiq] = tx.moveCall({
+          target: `${turbosPkg}::position_manager::get_position_info`,
+          typeArguments: [],
+          arguments: [tx.object(this.contracts.Positions), posAddr]
+        });
         const [decCoinA, decCoinB] = tx.moveCall({
           target: `${turbosPkg}::position_manager::decrease_liquidity_with_return_`,
           typeArguments: [coinTypeA, coinTypeB, feeType],
@@ -296,7 +307,7 @@ export class RebalancePtbBuilder {
             tx.object(poolId),
             tx.object(this.contracts.Positions),
             oldPos,
-            tx.pure.u128(liqBig),
+            livePosLiq,
             tx.pure.u64(0n),
             tx.pure.u64(0n),
             tx.pure.u64(deadline),
@@ -466,6 +477,7 @@ export class RebalancePtbBuilder {
     const turbosPkg = this.contracts.PackageId;
     const positionType = this._resolvePositionStructType();
 
+    const swapSafetyBufferPct = 1.5;
     const swapPlan = computeCetusFlashSwapAndAddPlan({
       rawCoinA,
       rawCoinB,
@@ -474,18 +486,22 @@ export class RebalancePtbBuilder {
       lowerTick: pos.lowerTick,
       upperTick: pos.upperTick,
       feeRateBps: pool.feeRate || 500,
-      safetyBufferPct: 1.5
+      safetyBufferPct: swapSafetyBufferPct,
+      slippagePct: Math.max(Number(SUI_CONFIG.strategy.maxSlippagePct || 0.5), 1.5)
     });
 
     const rawPriceBPerA = Number(swapPlan.rawPriceBPerA || 0);
     const postSwapValueInB = Number(swapPlan.estimatedPostSwapA) * rawPriceBPerA + Number(swapPlan.estimatedPostSwapB);
+    const vaultPosInB = Number(vaultSnapshot.positionAmounts?.amountA || 0n) * rawPriceBPerA + Number(vaultSnapshot.positionAmounts?.amountB || 0n);
     const vaultTvlInB = Number(vaultSnapshot.totalRawA) * rawPriceBPerA + Number(vaultSnapshot.totalRawB);
+    const lpShareOfVault = (vaultTvlInB > 0 && vaultPosInB > 0) ? Math.min(1, vaultPosInB / vaultTvlInB) : 1;
+    const expectedLpValueInB = postSwapValueInB * (1 - swapSafetyBufferPct / 100) * lpShareOfVault;
     const totalSharesBig = BigInt(vaultSnapshot.totalShares || 0n);
 
     const sharesToMint =
       totalSharesBig > 0n && vaultTvlInB > 0
-        ? BigInt(Math.max(1, Math.floor((Number(totalSharesBig) * postSwapValueInB) / vaultTvlInB)))
-        : BigInt(Math.max(1, Math.floor(postSwapValueInB)));
+        ? BigInt(Math.max(1, Math.floor((Number(totalSharesBig) * expectedLpValueInB) / vaultTvlInB)))
+        : BigInt(Math.max(1, Math.floor(expectedLpValueInB)));
 
     const tx = new Transaction();
     tx.setSender(userAddress);
@@ -520,7 +536,14 @@ export class RebalancePtbBuilder {
     const [valA] = tx.moveCall({ target: '0x2::coin::value', typeArguments: [coinTypeA], arguments: [coinA] });
     const [valB] = tx.moveCall({ target: '0x2::coin::value', typeArguments: [coinTypeB], arguments: [coinB] });
 
-    const minShares = BigInt(Math.max(1, Math.floor(Number(sharesToMint) * 0.85)));
+    const lpDesiredA = lpShareOfVault < 0.999
+      ? tx.pure.u64(BigInt(Math.max(0, Math.floor(Number(swapPlan.estimatedPostSwapA) * lpShareOfVault * 0.985))))
+      : valA;
+    const lpDesiredB = lpShareOfVault < 0.999
+      ? tx.pure.u64(BigInt(Math.max(0, Math.floor(Number(swapPlan.estimatedPostSwapB) * lpShareOfVault * 0.985))))
+      : valB;
+
+    const minShares = BigInt(Math.max(1, Math.floor(Number(sharesToMint) * 0.97)));
     const [newShare, leftCoinA, leftCoinB] = tx.moveCall({
       target: `${vaultCallPackageId}::vault::deposit_turbos_active`,
       typeArguments: [coinTypeA, coinTypeB, feeType],
@@ -530,8 +553,8 @@ export class RebalancePtbBuilder {
         tx.object(this.contracts.Positions),
         coinA,
         coinB,
-        valA,
-        valB,
+        lpDesiredA,
+        lpDesiredB,
         tx.pure.u64(minShares),
         tx.pure.u64(deadline),
         tx.object('0x6'),
@@ -668,8 +691,8 @@ export class RebalancePtbBuilder {
     }
 
     const deadline = BigInt(Date.now() + 180_000);
-    const minOutA = estOutA > 10000n ? (estOutA * 80n) / 100n : 0n;
-    const minOutB = estOutB > 10000n ? (estOutB * 80n) / 100n : 0n;
+    const minOutA = estOutA > 10000n ? (estOutA * 97n) / 100n : 0n;
+    const minOutB = estOutB > 10000n ? (estOutB * 97n) / 100n : 0n;
     const [outCoinA, outCoinB] = tx.moveCall({
       target: `${vaultCallPackageId}::vault::withdraw_turbos_active`,
       typeArguments: [coinTypeA, coinTypeB, feeType],

@@ -465,8 +465,9 @@ export function computeCetusFlashSwapAndAddPlan({
   poolLiquidity = null,
   lowerTick,
   upperTick,
-  feeRateBps = 2500, // Cetus fee_rate units: 2500 = 0.25% (denominator 1e6)
-  safetyBufferPct = 1.0
+  feeRateBps = 500, // Cetus fee_rate units: 500 = 0.05%, 2500 = 0.25% (denominator 1e6)
+  safetyBufferPct = 1.0,
+  slippagePct = 1.5
 }) {
   const amtA = Number(rawCoinA || 0n);
   const amtB = Number(rawCoinB || 0n);
@@ -509,8 +510,10 @@ export function computeCetusFlashSwapAndAddPlan({
 
   let a2b = null;
   let swapAmountRaw = 0n;
+  let estSwapOut = 0;
   let estA = amtA;
   let estB = amtB;
+  let postSqrtFloat = curSqrtFloat.toNumber();
   let postSqrtX64BN = curSqrtBN;
 
   if (refA === 0 && refB > 0) {
@@ -518,8 +521,10 @@ export function computeCetusFlashSwapAndAddPlan({
       a2b = true;
       swapAmountRaw = BigInt(Math.floor(amtA));
       const est = estimatePostSwap(true, amtA);
+      estSwapOut = est.outRaw;
       estA = 0;
       estB = amtB + est.outRaw;
+      postSqrtFloat = est.postSqrt;
       postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
     }
   } else if (refB === 0 && refA > 0) {
@@ -527,8 +532,10 @@ export function computeCetusFlashSwapAndAddPlan({
       a2b = false;
       swapAmountRaw = BigInt(Math.floor(amtB));
       const est = estimatePostSwap(false, amtB);
+      estSwapOut = est.outRaw;
       estA = amtA + est.outRaw;
       estB = 0;
+      postSqrtFloat = est.postSqrt;
       postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
     }
   } else if (refA > 0 && refB > 0) {
@@ -551,8 +558,10 @@ export function computeCetusFlashSwapAndAddPlan({
         a2b = true;
         swapAmountRaw = BigInt(dx);
         const est = estimatePostSwap(true, dx);
+        estSwapOut = est.outRaw;
         estA = amtA - dx;
         estB = amtB + est.outRaw;
+        postSqrtFloat = est.postSqrt;
         postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
       }
     } else if (amtA < targetA * 0.995 && amtB > 0) {
@@ -566,8 +575,10 @@ export function computeCetusFlashSwapAndAddPlan({
         a2b = false;
         swapAmountRaw = BigInt(dy);
         const est = estimatePostSwap(false, dy);
+        estSwapOut = est.outRaw;
         estA = amtA + est.outRaw;
         estB = amtB - dy;
+        postSqrtFloat = est.postSqrt;
         postSqrtX64BN = new BN(new BigNumber(est.postSqrt).multipliedBy(q64).integerValue(BigNumber.ROUND_FLOOR).toFixed(0));
       }
     }
@@ -609,11 +620,36 @@ export function computeCetusFlashSwapAndAddPlan({
     }
   }
 
+  const MIN_SQRT_PRICE = 4295048017n;
+  const MAX_SQRT_PRICE = 79226673515401279992447579054n;
+  const swapSlippagePct = Math.max(0.25, Math.min(25, Number(slippagePct) || 1.5));
+  let sqrtPriceLimit = a2b ? MIN_SQRT_PRICE : MAX_SQRT_PRICE;
+  let minSwapOutRaw = 0n;
+  if (swapAmountRaw > 0n && a2b !== null) {
+    const sqrtFactor = a2b
+      ? Math.sqrt(Math.max(0.5, 1 - swapSlippagePct / 100))
+      : Math.sqrt(1 + swapSlippagePct / 100);
+    const rawLimit = BigInt(
+      new BigNumber(postSqrtFloat)
+        .multipliedBy(sqrtFactor)
+        .multipliedBy(q64)
+        .integerValue(a2b ? BigNumber.ROUND_FLOOR : BigNumber.ROUND_CEIL)
+        .toFixed(0)
+    );
+    sqrtPriceLimit = rawLimit < MIN_SQRT_PRICE
+      ? MIN_SQRT_PRICE
+      : (rawLimit > MAX_SQRT_PRICE ? MAX_SQRT_PRICE : rawLimit);
+    minSwapOutRaw = BigInt(Math.max(0, Math.floor(estSwapOut * Math.max(0.5, 1 - swapSlippagePct / 100))));
+  }
+
   return {
     executeOnChain: swapAmountRaw > 0n && a2b !== null,
     a2b,
     swapDirection: a2b === null ? 'NONE' : a2b ? 'A_TO_B' : 'B_TO_A',
     swapAmountRaw,
+    sqrtPriceLimit: sqrtPriceLimit.toString(),
+    minSwapOutRaw,
+    estimatedSwapOutRaw: BigInt(Math.max(0, Math.floor(estSwapOut))),
     isFixA,
     redeployFixAmount,
     estimatedPostSwapA: BigInt(Math.floor(estA)),

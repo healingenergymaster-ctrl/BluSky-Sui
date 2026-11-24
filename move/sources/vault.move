@@ -5,6 +5,7 @@ module blusky_vault::vault {
     use sui::balance::{Self, Balance};
     use sui::clock::Clock;
     use sui::coin::{Self, Coin};
+    use sui::dynamic_field as df;
     use sui::dynamic_object_field as dof;
     use sui::event;
     use cetusclmm::config::GlobalConfig as CetusGlobalConfig;
@@ -79,11 +80,19 @@ module blusky_vault::vault {
     const EInsufficientLiquidity: u64 = 13;
     const EInvalidPool: u64 = 14;
     const ESlippageExceeded: u64 = 15;
+    const EWrongVersion: u64 = 16;
 
     // --- Constants ---
     const MAX_FEE_BPS: u64 = 2500; // Maximum allowed performance fee: 25.0%
     const DEFAULT_FEE_BPS: u64 = 1000; // 10.0% performance fee on trading profits
     const MINIMUM_LIQUIDITY: u64 = 1000; // Minimum liquidity burned permanently on first deposit
+    const CURRENT_VERSION: u64 = 4;
+
+    /// Dynamic field key storing package compatibility version
+    public struct VersionKey has copy, drop, store {}
+
+    /// Dynamic field key locking the extracted CLMM Position ID during legacy start/finish custody
+    public struct ExpectedPosKey has copy, drop, store {}
 
     /// Dynamic object field key for storing generic CLMM position NFT
     public struct PositionKey has copy, drop, store {}
@@ -151,7 +160,7 @@ module blusky_vault::vault {
         let vault_uid = object::new(ctx);
         let vault_id = object::uid_to_inner(&vault_uid);
 
-        let vault = Vault<CoinA, CoinB> {
+        let mut vault = Vault<CoinA, CoinB> {
             id: vault_uid,
             balance_a: balance::zero<CoinA>(),
             balance_b: balance::zero<CoinB>(),
@@ -163,6 +172,7 @@ module blusky_vault::vault {
             current_upper_tick: 0,
             is_rebalancing: false,
         };
+        df::add(&mut vault.id, VersionKey {}, CURRENT_VERSION);
 
         let admin_cap = VaultAdminCap {
             id: object::new(ctx),
@@ -188,9 +198,49 @@ module blusky_vault::vault {
         create_vault<CoinA, CoinB>(DEFAULT_FEE_BPS, fee_treasury, ctx);
     }
 
+    fun assert_version<CoinA, CoinB>(vault: &Vault<CoinA, CoinB>) {
+        if (df::exists(&vault.id, VersionKey {})) {
+            assert!(*df::borrow<VersionKey, u64>(&vault.id, VersionKey {}) == CURRENT_VERSION, EWrongVersion);
+        };
+    }
+
+    /// Absorbs pro-rata idle vault balances (rounded up) when minting active-LP shares
+    /// so idle dust/reserves cannot be diluted or siphoned via deposit_*_active.
+    fun absorb_pro_rata_idle<CoinA, CoinB>(
+        vault: &mut Vault<CoinA, CoinB>,
+        bal_a: &mut Balance<CoinA>,
+        bal_b: &mut Balance<CoinB>,
+        delta_liq: u128,
+        liq_before: u128
+    ): (u64, u64) {
+        let idle_a = balance::value(&vault.balance_a);
+        let idle_b = balance::value(&vault.balance_b);
+        let need_idle_a = if (idle_a == 0) {
+            0
+        } else {
+            (((delta_liq * (idle_a as u128)) + liq_before - 1) / liq_before) as u64
+        };
+        let need_idle_b = if (idle_b == 0) {
+            0
+        } else {
+            (((delta_liq * (idle_b as u128)) + liq_before - 1) / liq_before) as u64
+        };
+        assert!(
+            balance::value(bal_a) >= need_idle_a && balance::value(bal_b) >= need_idle_b,
+            EInsufficientLiquidity
+        );
+        if (need_idle_a > 0) {
+            balance::join(&mut vault.balance_a, balance::split(bal_a, need_idle_a));
+        };
+        if (need_idle_b > 0) {
+            balance::join(&mut vault.balance_b, balance::split(bal_b, need_idle_b));
+        };
+        (need_idle_a, need_idle_b)
+    }
+
     // --- User Actions: Deposit & Withdraw ---
 
-    /// Deposits CoinA and CoinB into the vault, minting transferable VaultShares.
+    /// Deposits CoinA and CoinB into an idle vault (before a CLMM position is active), minting transferable VaultShares.
     /// Locks MINIMUM_LIQUIDITY permanently on the initial deposit to prevent share inflation attacks.
     public fun deposit<CoinA, CoinB>(
         vault: &mut Vault<CoinA, CoinB>,
@@ -198,7 +248,9 @@ module blusky_vault::vault {
         coin_b: Coin<CoinB>,
         ctx: &mut TxContext
     ): VaultShare<CoinA, CoinB> {
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
 
         let amount_a = coin::value(&coin_a);
         let amount_b = coin::value(&coin_b);
@@ -214,22 +266,15 @@ module blusky_vault::vault {
             assert!(initial_sum > MINIMUM_LIQUIDITY, EInsufficientLiquidity);
             vault.total_shares = MINIMUM_LIQUIDITY;
             shares_to_mint = initial_sum - MINIMUM_LIQUIDITY;
+        } else if (cur_val_a > 0 && cur_val_b > 0) {
+            assert!(amount_a > 0 && amount_b > 0, EZeroDeposit);
+            let share_a = (((amount_a as u128) * (vault.total_shares as u128)) / (cur_val_a as u128)) as u64;
+            let share_b = (((amount_b as u128) * (vault.total_shares as u128)) / (cur_val_b as u128)) as u64;
+            shares_to_mint = if (share_a < share_b) { share_a } else { share_b };
+        } else if (cur_val_a > 0) {
+            shares_to_mint = (((amount_a as u128) * (vault.total_shares as u128)) / (cur_val_a as u128)) as u64;
         } else {
-            // Proportional share issuance based on current total assets using u128 arithmetic
-            let share_a = if (cur_val_a > 0) {
-                (((amount_a as u128) * (vault.total_shares as u128)) / (cur_val_a as u128)) as u64
-            } else { 0 };
-            let share_b = if (cur_val_b > 0) {
-                (((amount_b as u128) * (vault.total_shares as u128)) / (cur_val_b as u128)) as u64
-            } else { 0 };
-
-            if (share_a > 0 && share_b > 0) {
-                shares_to_mint = if (share_a < share_b) { share_a } else { share_b };
-            } else if (share_a > 0) {
-                shares_to_mint = share_a;
-            } else {
-                shares_to_mint = share_b;
-            };
+            shares_to_mint = (((amount_b as u128) * (vault.total_shares as u128)) / (cur_val_b as u128)) as u64;
         };
 
         assert!(shares_to_mint > 0, EZeroShares);
@@ -268,7 +313,10 @@ module blusky_vault::vault {
 
         assert!(vault_id == object::uid_to_inner(&vault.id), EInvalidShareVault);
         assert!(shares > 0, EZeroShares);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
+        assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
+        assert!(vault.total_shares > shares, EInsufficientShares);
 
         let total_val_a = balance::value(&vault.balance_a);
         let total_val_b = balance::value(&vault.balance_b);
@@ -335,6 +383,7 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ) {
         assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
 
         let gross_a = coin::value(&fee_coin_a);
@@ -394,6 +443,7 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ) {
         assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(new_lower_tick < new_upper_tick, EInvalidTicks);
 
@@ -421,6 +471,7 @@ module blusky_vault::vault {
         pos: Pos
     ) {
         assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
 
@@ -437,6 +488,7 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ): (Option<Pos>, Coin<CoinA>, Coin<CoinB>, RebalanceReceipt<CoinA, CoinB>) {
         assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
 
         vault.is_rebalancing = true;
@@ -477,6 +529,7 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ) {
         let RebalanceReceipt { vault_id } = receipt;
+        assert_version(vault);
         assert!(vault_id == object::uid_to_inner(&vault.id), EInvalidReceipt);
         assert!(vault.is_rebalancing, ENotRebalancing);
 
@@ -523,12 +576,14 @@ module blusky_vault::vault {
         vault: &mut Vault<CoinA, CoinB>,
     ): (Pos, DepositLiquidityReceipt<CoinA, CoinB>) {
         assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
 
         vault.is_rebalancing = true;
         let pos = dof::remove<PositionKey, Pos>(&mut vault.id, PositionKey {});
         vault.clmm_position_id = option::none();
+        df::add(&mut vault.id, ExpectedPosKey {}, object::id(&pos));
 
         let receipt = DepositLiquidityReceipt<CoinA, CoinB> {
             vault_id: object::uid_to_inner(&vault.id),
@@ -550,10 +605,14 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ): VaultShare<CoinA, CoinB> {
         let DepositLiquidityReceipt { vault_id } = receipt;
+        assert_version(vault);
         assert!(vault_id == object::uid_to_inner(&vault.id), EInvalidReceipt);
         assert!(vault.is_rebalancing, ENotRebalancing);
         assert!(shares_to_mint > 0, EZeroShares);
         assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
+        assert!(df::exists(&vault.id, ExpectedPosKey {}), EInvalidReceipt);
+        let expected_pos_id = df::remove<ExpectedPosKey, ID>(&mut vault.id, ExpectedPosKey {});
+        assert!(object::id(&pos) == expected_pos_id, EInvalidReceipt);
 
         vault.is_rebalancing = false;
         vault.clmm_position_id = option::some(object::id(&pos));
@@ -588,6 +647,7 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ): (Pos, Coin<CoinA>, Coin<CoinB>, WithdrawLiquidityReceipt<CoinA, CoinB>) {
         assert!(cap.vault_id == object::uid_to_inner(&vault.id), EInvalidOperatorCap);
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
 
@@ -609,6 +669,7 @@ module blusky_vault::vault {
 
         let pos = dof::remove<PositionKey, Pos>(&mut vault.id, PositionKey {});
         vault.clmm_position_id = option::none();
+        df::add(&mut vault.id, ExpectedPosKey {}, object::id(&pos));
 
         let coin_a = coin::take(&mut vault.balance_a, idle_out_a, ctx);
         let coin_b = coin::take(&mut vault.balance_b, idle_out_b, ctx);
@@ -631,9 +692,13 @@ module blusky_vault::vault {
         ctx: &mut TxContext
     ) {
         let WithdrawLiquidityReceipt { vault_id, shares_burned } = receipt;
+        assert_version(vault);
         assert!(vault_id == object::uid_to_inner(&vault.id), EInvalidReceipt);
         assert!(vault.is_rebalancing, ENotRebalancing);
         assert!(!dof::exists(&vault.id, PositionKey {}), EPositionAlreadyExists);
+        assert!(df::exists(&vault.id, ExpectedPosKey {}), EInvalidReceipt);
+        let expected_pos_id = df::remove<ExpectedPosKey, ID>(&mut vault.id, ExpectedPosKey {});
+        assert!(object::id(&pos) == expected_pos_id, EInvalidReceipt);
 
         vault.is_rebalancing = false;
         vault.clmm_position_id = option::some(object::id(&pos));
@@ -665,37 +730,40 @@ module blusky_vault::vault {
         clock: &Clock,
         ctx: &mut TxContext
     ): (VaultShare<CoinA, CoinB>, Coin<CoinA>, Coin<CoinB>) {
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
         assert!(vault.total_shares > 0, EInsufficientLiquidity);
         assert!(fix_amount > 0, EZeroDeposit);
 
-        let pos = dof::borrow_mut<PositionKey, CetusPosition>(&mut vault.id, PositionKey {});
-        assert!(object::id(pool) == cetus_position::pool_id(pos), EInvalidPool);
+        let (liq_before, delta_liq, pay_a, pay_b, mut bal_a, mut bal_b) = {
+            let mut bal_a = coin::into_balance(coin_a);
+            let mut bal_b = coin::into_balance(coin_b);
+            let pos = dof::borrow_mut<PositionKey, CetusPosition>(&mut vault.id, PositionKey {});
+            assert!(object::id(pool) == cetus_position::pool_id(pos), EInvalidPool);
 
-        let liq_before = cetus_position::liquidity(pos);
-        assert!(liq_before > 0, EInsufficientLiquidity);
+            let liq_before = cetus_position::liquidity(pos);
+            assert!(liq_before > 0, EInsufficientLiquidity);
 
-        let mut bal_a = coin::into_balance(coin_a);
-        let mut bal_b = coin::into_balance(coin_b);
+            let add_receipt = cetus_pool::add_liquidity_fix_coin(
+                config,
+                pool,
+                pos,
+                fix_amount,
+                fix_amount_a,
+                clock
+            );
+            let (pay_a, pay_b) = cetus_pool::add_liquidity_pay_amount(&add_receipt);
+            let pay_bal_a = balance::split(&mut bal_a, pay_a);
+            let pay_bal_b = balance::split(&mut bal_b, pay_b);
+            cetus_pool::repay_add_liquidity(config, pool, pay_bal_a, pay_bal_b, add_receipt);
 
-        let add_receipt = cetus_pool::add_liquidity_fix_coin(
-            config,
-            pool,
-            pos,
-            fix_amount,
-            fix_amount_a,
-            clock
-        );
-        let (pay_a, pay_b) = cetus_pool::add_liquidity_pay_amount(&add_receipt);
-        let pay_bal_a = balance::split(&mut bal_a, pay_a);
-        let pay_bal_b = balance::split(&mut bal_b, pay_b);
-        cetus_pool::repay_add_liquidity(config, pool, pay_bal_a, pay_bal_b, add_receipt);
+            let liq_after = cetus_position::liquidity(pos);
+            assert!(liq_after > liq_before, EZeroDeposit);
+            (liq_before, liq_after - liq_before, pay_a, pay_b, bal_a, bal_b)
+        };
 
-        let liq_after = cetus_position::liquidity(pos);
-        assert!(liq_after > liq_before, EZeroDeposit);
-        let delta_liq = liq_after - liq_before;
-
+        let (idle_in_a, idle_in_b) = absorb_pro_rata_idle(vault, &mut bal_a, &mut bal_b, delta_liq, liq_before);
         let shares_to_mint = ((delta_liq * (vault.total_shares as u128)) / liq_before) as u64;
         assert!(shares_to_mint > 0, EZeroShares);
         assert!(shares_to_mint >= min_shares, ESlippageExceeded);
@@ -707,8 +775,8 @@ module blusky_vault::vault {
             vault_id,
             depositor: tx_context::sender(ctx),
             shares_minted: shares_to_mint,
-            amount_a: pay_a,
-            amount_b: pay_b,
+            amount_a: pay_a + idle_in_a,
+            amount_b: pay_b + idle_in_b,
         });
 
         let share = VaultShare<CoinA, CoinB> {
@@ -731,6 +799,7 @@ module blusky_vault::vault {
         clock: &Clock,
         ctx: &mut TxContext
     ): (Coin<CoinA>, Coin<CoinB>) {
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
 
@@ -802,6 +871,7 @@ module blusky_vault::vault {
         versioned: &TurbosVersioned,
         ctx: &mut TxContext
     ): (VaultShare<CoinA, CoinB>, Coin<CoinA>, Coin<CoinB>) {
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
         assert!(vault.total_shares > 0, EInsufficientLiquidity);
@@ -810,41 +880,44 @@ module blusky_vault::vault {
         let in_b_val = coin::value(&coin_b);
         assert!(in_a_val > 0 || in_b_val > 0, EZeroDeposit);
 
-        let nft = dof::borrow_mut<PositionKey, TurbosPositionNFT>(&mut vault.id, PositionKey {});
-        assert!(object::id(pool) == turbos_nft::pool_id(nft), EInvalidPool);
+        let (liq_before, delta_liq, mut left_bal_a, mut left_bal_b) = {
+            let nft = dof::borrow_mut<PositionKey, TurbosPositionNFT>(&mut vault.id, PositionKey {});
+            assert!(object::id(pool) == turbos_nft::pool_id(nft), EInvalidPool);
 
-        let nft_addr = object::id_to_address(&object::id(nft));
-        let (_, _, liq_before) = turbos_pm::get_position_info(positions, nft_addr);
-        assert!(liq_before > 0, EInsufficientLiquidity);
+            let nft_addr = object::id_to_address(&object::id(nft));
+            let (_, _, liq_before) = turbos_pm::get_position_info(positions, nft_addr);
+            assert!(liq_before > 0, EInsufficientLiquidity);
 
-        let (left_a, left_b) = turbos_pm::increase_liquidity_with_return_(
-            pool,
-            positions,
-            vector[coin_a],
-            vector[coin_b],
-            nft,
-            amount_a_desired,
-            amount_b_desired,
-            0,
-            0,
-            deadline,
-            clock,
-            versioned,
-            ctx
-        );
+            let (left_a, left_b) = turbos_pm::increase_liquidity_with_return_(
+                pool,
+                positions,
+                vector[coin_a],
+                vector[coin_b],
+                nft,
+                amount_a_desired,
+                amount_b_desired,
+                0,
+                0,
+                deadline,
+                clock,
+                versioned,
+                ctx
+            );
 
-        let (_, _, liq_after) = turbos_pm::get_position_info(positions, nft_addr);
-        assert!(liq_after > liq_before, EZeroDeposit);
-        let delta_liq = liq_after - liq_before;
+            let (_, _, liq_after) = turbos_pm::get_position_info(positions, nft_addr);
+            assert!(liq_after > liq_before, EZeroDeposit);
+            (liq_before, liq_after - liq_before, coin::into_balance(left_a), coin::into_balance(left_b))
+        };
 
+        let (_idle_in_a, _idle_in_b) = absorb_pro_rata_idle(vault, &mut left_bal_a, &mut left_bal_b, delta_liq, liq_before);
         let shares_to_mint = ((delta_liq * (vault.total_shares as u128)) / liq_before) as u64;
         assert!(shares_to_mint > 0, EZeroShares);
         assert!(shares_to_mint >= min_shares, ESlippageExceeded);
 
         vault.total_shares = vault.total_shares + shares_to_mint;
         let vault_id = object::uid_to_inner(&vault.id);
-        let left_a_val = coin::value(&left_a);
-        let left_b_val = coin::value(&left_b);
+        let left_a_val = balance::value(&left_bal_a);
+        let left_b_val = balance::value(&left_bal_b);
         let used_a = if (in_a_val >= left_a_val) { in_a_val - left_a_val } else { 0 };
         let used_b = if (in_b_val >= left_b_val) { in_b_val - left_b_val } else { 0 };
 
@@ -861,7 +934,7 @@ module blusky_vault::vault {
             vault_id,
             shares: shares_to_mint,
         };
-        (share, left_a, left_b)
+        (share, coin::from_balance(left_bal_a, ctx), coin::from_balance(left_bal_b, ctx))
     }
 
     /// Permissionlessly redeems a user's VaultShare against the vault's active Turbos Position
@@ -878,6 +951,7 @@ module blusky_vault::vault {
         versioned: &TurbosVersioned,
         ctx: &mut TxContext
     ): (Coin<CoinA>, Coin<CoinB>) {
+        assert_version(vault);
         assert!(!vault.is_rebalancing, ERebalanceInProgress);
         assert!(dof::exists(&vault.id, PositionKey {}), EInsufficientLiquidity);
 
@@ -958,6 +1032,31 @@ module blusky_vault::vault {
     ) {
         assert!(admin.vault_id == object::uid_to_inner(&vault.id), EInvalidAdminCap);
         vault.fee_treasury = new_treasury;
+    }
+
+    public fun migrate_version<CoinA, CoinB>(
+        admin: &VaultAdminCap,
+        vault: &mut Vault<CoinA, CoinB>
+    ) {
+        assert!(admin.vault_id == object::uid_to_inner(&vault.id), EInvalidAdminCap);
+        if (df::exists(&vault.id, VersionKey {})) {
+            let v = df::borrow_mut<VersionKey, u64>(&mut vault.id, VersionKey {});
+            *v = CURRENT_VERSION;
+        } else {
+            df::add(&mut vault.id, VersionKey {}, CURRENT_VERSION);
+        };
+    }
+
+    public fun current_version(): u64 {
+        CURRENT_VERSION
+    }
+
+    public fun vault_version<CoinA, CoinB>(vault: &Vault<CoinA, CoinB>): u64 {
+        if (df::exists(&vault.id, VersionKey {})) {
+            *df::borrow<VersionKey, u64>(&vault.id, VersionKey {})
+        } else {
+            0
+        }
     }
 
     // --- Public Getters ---
@@ -1065,4 +1164,15 @@ module blusky_vault::vault {
     public fun err_invalid_pool(): u64 { EInvalidPool }
     #[test_only]
     public fun err_slippage_exceeded(): u64 { ESlippageExceeded }
+    #[test_only]
+    public fun err_wrong_version(): u64 { EWrongVersion }
+    #[test_only]
+    public fun set_version_for_testing<CoinA, CoinB>(vault: &mut Vault<CoinA, CoinB>, version: u64) {
+        if (df::exists(&vault.id, VersionKey {})) {
+            let v = df::borrow_mut<VersionKey, u64>(&mut vault.id, VersionKey {});
+            *v = version;
+        } else {
+            df::add(&mut vault.id, VersionKey {}, version);
+        };
+    }
 }

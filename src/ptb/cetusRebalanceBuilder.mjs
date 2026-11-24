@@ -710,6 +710,7 @@ export class CetusRebalancePtbBuilder {
     const positionType = this._resolvePositionStructType();
     const globalConfigId = this.contracts.globalConfigId;
 
+    const swapSafetyBufferPct = 5.0;
     const swapPlan = computeCetusFlashSwapAndAddPlan({
       rawCoinA,
       rawCoinB,
@@ -717,19 +718,24 @@ export class CetusRebalancePtbBuilder {
       poolLiquidity: pool.liquidity,
       lowerTick: pos.lowerTick,
       upperTick: pos.upperTick,
-      feeRateBps: pool.feeRate || 2500,
-      safetyBufferPct: 5.0
+      feeRateBps: pool.feeRate || 500,
+      safetyBufferPct: swapSafetyBufferPct,
+      slippagePct: Math.max(Number(SUI_CONFIG.strategy.maxSlippagePct || 0.5), 1.5)
     });
 
     const rawPriceBPerA = Number(swapPlan.rawPriceBPerA || 0);
     const postSwapValueInB = Number(swapPlan.estimatedPostSwapA) * rawPriceBPerA + Number(swapPlan.estimatedPostSwapB);
+    const vaultPosInB = Number(vaultSnapshot.positionAmounts?.amountA || 0n) * rawPriceBPerA + Number(vaultSnapshot.positionAmounts?.amountB || 0n);
     const vaultTvlInB = Number(vaultSnapshot.totalRawA) * rawPriceBPerA + Number(vaultSnapshot.totalRawB);
+    const lpShareOfVault = (vaultTvlInB > 0 && vaultPosInB > 0) ? Math.min(1, vaultPosInB / vaultTvlInB) : 1;
+    const effectiveRedeployFix = BigInt(Math.max(1, Math.floor(Number(swapPlan.redeployFixAmount) * lpShareOfVault)));
+    const expectedLpValueInB = postSwapValueInB * (1 - swapSafetyBufferPct / 100) * lpShareOfVault;
     const totalSharesBig = BigInt(vaultSnapshot.totalShares || 0n);
 
     const sharesToMint =
       totalSharesBig > 0n && vaultTvlInB > 0
-        ? BigInt(Math.max(1, Math.floor((Number(totalSharesBig) * postSwapValueInB) / vaultTvlInB)))
-        : BigInt(Math.max(1, Math.floor(postSwapValueInB)));
+        ? BigInt(Math.max(1, Math.floor((Number(totalSharesBig) * expectedLpValueInB) / vaultTvlInB)))
+        : BigInt(Math.max(1, Math.floor(expectedLpValueInB)));
 
     const tx = new Transaction();
     tx.setSender(userAddress);
@@ -770,7 +776,7 @@ export class CetusRebalancePtbBuilder {
       arguments: [balB]
     });
 
-    const minShares = BigInt(Math.max(1, Math.floor(Number(sharesToMint) * 0.85)));
+    const minShares = BigInt(Math.max(1, Math.floor(Number(sharesToMint) * 0.97)));
     const [newShare, leftCoinA, leftCoinB] = tx.moveCall({
       target: `${vaultCallPackageId}::vault::deposit_cetus_active`,
       typeArguments: [coinTypeA, coinTypeB],
@@ -780,7 +786,7 @@ export class CetusRebalancePtbBuilder {
         tx.object(targetPoolId),
         inCoinA,
         inCoinB,
-        tx.pure.u64(BigInt(swapPlan.redeployFixAmount)),
+        tx.pure.u64(effectiveRedeployFix),
         tx.pure.bool(Boolean(swapPlan.isFixA)),
         tx.pure.u64(minShares),
         tx.object('0x6')
@@ -918,8 +924,8 @@ export class CetusRebalancePtbBuilder {
       burnShareArg = splitOut;
     }
 
-    const minOutA = estOutA > 10000n ? (estOutA * 80n) / 100n : 0n;
-    const minOutB = estOutB > 10000n ? (estOutB * 80n) / 100n : 0n;
+    const minOutA = estOutA > 10000n ? (estOutA * 97n) / 100n : 0n;
+    const minOutB = estOutB > 10000n ? (estOutB * 97n) / 100n : 0n;
     const [outCoinA, outCoinB] = tx.moveCall({
       target: `${vaultCallPackageId}::vault::withdraw_cetus_active`,
       typeArguments: [coinTypeA, coinTypeB],

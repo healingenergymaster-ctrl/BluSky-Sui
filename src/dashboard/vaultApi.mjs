@@ -2,7 +2,7 @@
 // Public Dashboard API & Yield Analytics Service
 
 import { SUI_CONFIG, getVaultCatalog, resolveVaultConfig } from '../config.mjs';
-import { VaultContractService } from '../services/vaultContract.mjs';
+import { VaultContractService, listAllOwnedVaultShares } from '../services/vaultContract.mjs';
 import { computeMarketNeutralApy } from '../hedging/deltaMath.mjs';
 import { defaultTurbosService } from '../services/turbos.mjs';
 import { defaultCetusService } from '../services/cetus.mjs';
@@ -367,17 +367,9 @@ export class VaultApiService {
       userAddress.toLowerCase() !== '0x7f4a29c18b6e4d51a92e34018dfcb41928df92b1'
     ) {
       try {
-        const owned = await defaultCetusService.grpcClient.listOwnedObjects({
-          owner: userAddress,
-          include: { json: true }
-        });
-        const objects = owned?.objects || owned?.data || [];
-        let userSharesRaw = 0n;
-        for (const obj of objects) {
-          if (obj?.type?.includes('::vault::VaultShare') && obj?.json?.vault_id === vaultSnapshot.vaultId) {
-            userSharesRaw += BigInt(obj.json.shares || '0');
-          }
-        }
+        const shareType = `${SUI_CONFIG.vault.packageId}::vault::VaultShare<${vaultSnapshot.coinTypeA}, ${vaultSnapshot.coinTypeB}>`;
+        const shares = await listAllOwnedVaultShares(defaultCetusService.grpcClient, userAddress, vaultSnapshot.vaultId, shareType);
+        const userSharesRaw = shares.reduce((acc, s) => acc + BigInt(s.shares), 0n);
         const totalSharesNum = Number(vaultSnapshot.totalShares || 0n);
         const userSharesNum = Number(userSharesRaw);
         const vaultTvlUsd = vaultSnapshot.totalUsdc + vaultSnapshot.totalSui * currentPrice;

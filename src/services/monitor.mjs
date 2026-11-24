@@ -166,7 +166,8 @@ export class PositionMonitor {
       poolLiquidity: analysis.pool.liquidity,
       lowerTick: targetRange.lowerTick,
       upperTick: targetRange.upperTick,
-      feeRateBps: analysis.pool.feeRate || vaultCfg.feeRateBps || 500
+      feeRateBps: analysis.pool.feeRate || vaultCfg.feeRateBps || 500,
+      slippagePct: Math.max(Number(SUI_CONFIG.strategy.maxSlippagePct || 0.5), 1.0)
     });
 
     const ptbOptions = {

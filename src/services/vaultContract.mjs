@@ -14,6 +14,31 @@ export const VAULT_PACKAGE_CONFIG = {
   defaultPerformanceFeeBps: 1000 // 10.0%
 };
 
+/**
+ * Fetches all VaultShare objects owned by `userAddress` for `vaultId` across all RPC pages.
+ */
+export async function listAllOwnedVaultShares(grpcClient, userAddress, vaultId, shareType = null) {
+  if (!grpcClient || !userAddress || !vaultId) return [];
+  const items = [];
+  let cursor = null;
+  do {
+    const page = await grpcClient.listOwnedObjects({
+      owner: userAddress,
+      ...(shareType ? { type: shareType } : {}),
+      ...(cursor ? { cursor } : {}),
+      include: { json: true }
+    });
+    for (const o of (page?.objects || page?.data || [])) {
+      const matchesType = shareType ? true : o?.type?.includes('::vault::VaultShare');
+      if (matchesType && o?.json?.vault_id === vaultId && BigInt(o.json?.shares || '0') > 0n) {
+        items.push({ objectId: o.objectId, shares: String(o.json.shares) });
+      }
+    }
+    cursor = page?.hasNextPage && page?.cursor ? page.cursor : null;
+  } while (cursor);
+  return items;
+}
+
 export class VaultContractService {
   constructor(options = {}) {
     this.packageId = options.packageId || VAULT_PACKAGE_CONFIG.packageId;

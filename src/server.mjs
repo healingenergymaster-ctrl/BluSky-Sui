@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 import { fromBase64, toBase64 } from '@mysten/sui/utils';
 import { SUI_CONFIG, getVaultCatalog, resolveVaultConfig } from './config.mjs';
 import { VaultApiService } from './dashboard/vaultApi.mjs';
+import { listAllOwnedVaultShares } from './services/vaultContract.mjs';
 import { TurbosService, fetchLiveSuiPrice } from './services/turbos.mjs';
 import { defaultCetusService } from './services/cetus.mjs';
 import { CetusRebalancePtbBuilder } from './ptb/cetusRebalanceBuilder.mjs';
@@ -99,14 +100,7 @@ async function getUserVaultShareObjects(userAddress, vaultSnapshot) {
   const grpcClient = defaultCetusService.grpcClient;
   if (!grpcClient || !vaultSnapshot) return [];
   const shareType = `${SUI_CONFIG.vault.packageId}::vault::VaultShare<${vaultSnapshot.coinTypeA}, ${vaultSnapshot.coinTypeB}>`;
-  const owned = await grpcClient.listOwnedObjects({
-    owner: userAddress,
-    type: shareType,
-    include: { json: true }
-  });
-  return (owned?.objects || [])
-    .filter((o) => o?.json?.vault_id === vaultSnapshot.vaultId && BigInt(o.json?.shares || '0') > 0n)
-    .map((o) => ({ objectId: o.objectId, shares: String(o.json.shares) }));
+  return listAllOwnedVaultShares(grpcClient, userAddress, vaultSnapshot.vaultId, shareType);
 }
 
 async function prepareLivePtbResponse({ ptbResult, action, userAddress }) {
