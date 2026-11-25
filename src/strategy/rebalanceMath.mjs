@@ -658,5 +658,72 @@ export function computeCetusFlashSwapAndAddPlan({
   };
 }
 
+/**
+ * Computes conservative Q64.64 sqrtPriceLimit and minOutRaw for a single-direction swap
+ * (used for 1-click USDC Zap-Out withdrawals).
+ */
+export function computeSingleSwapSlippageBounds({
+  swapAmountRaw,
+  a2b,
+  poolSqrtPriceX64,
+  poolLiquidity = null,
+  feeRateBps = 500,
+  slippagePct = 2.0
+}) {
+  const amt = Number(swapAmountRaw || 0n);
+  const MIN_SQRT_PRICE = 4295048017n;
+  const MAX_SQRT_PRICE = 79226673515401279992447579054n;
+  if (!Number.isFinite(amt) || amt <= 0) {
+    return {
+      sqrtPriceLimit: (a2b ? MIN_SQRT_PRICE : MAX_SQRT_PRICE).toString(),
+      minSwapOutRaw: 0n,
+      estimatedSwapOutRaw: 0n
+    };
+  }
+
+  const q64 = new BigNumber(2).pow(64);
+  const s0 = new BigNumber(String(poolSqrtPriceX64)).dividedBy(q64).toNumber();
+  const feeDecimal = Number(feeRateBps || 500) / 1_000_000;
+  const netIn = amt * (1 - feeDecimal);
+  const L = poolLiquidity ? Number(poolLiquidity) : 0;
+
+  let postSqrt = s0;
+  let estOut = 0;
+  if (L > 0) {
+    if (a2b) {
+      postSqrt = (L * s0) / (L + netIn * s0);
+      estOut = Math.max(0, L * (s0 - postSqrt));
+    } else {
+      postSqrt = s0 + netIn / L;
+      estOut = Math.max(0, L * (1 / s0 - 1 / postSqrt));
+    }
+  } else {
+    const rawPrice = s0 * s0;
+    estOut = a2b ? netIn * rawPrice : netIn / rawPrice;
+  }
+
+  const boundedPct = Math.max(0.25, Math.min(25, Number(slippagePct) || 2.0));
+  const sqrtFactor = a2b
+    ? Math.sqrt(Math.max(0.5, 1 - boundedPct / 100))
+    : Math.sqrt(1 + boundedPct / 100);
+  const rawLimit = BigInt(
+    new BigNumber(postSqrt)
+      .multipliedBy(sqrtFactor)
+      .multipliedBy(q64)
+      .integerValue(a2b ? BigNumber.ROUND_FLOOR : BigNumber.ROUND_CEIL)
+      .toFixed(0)
+  );
+  const sqrtPriceLimit = rawLimit < MIN_SQRT_PRICE
+    ? MIN_SQRT_PRICE
+    : (rawLimit > MAX_SQRT_PRICE ? MAX_SQRT_PRICE : rawLimit);
+  const minSwapOutRaw = BigInt(Math.max(0, Math.floor(estOut * Math.max(0.5, 1 - boundedPct / 100))));
+
+  return {
+    sqrtPriceLimit: sqrtPriceLimit.toString(),
+    minSwapOutRaw,
+    estimatedSwapOutRaw: BigInt(Math.max(0, Math.floor(estOut)))
+  };
+}
+
 
 

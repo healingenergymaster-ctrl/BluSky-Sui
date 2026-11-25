@@ -86,6 +86,7 @@ export class PositionMonitor {
           deltaDriftPct: record.hedgeReport.deltaStatus?.deltaDriftPct,
           adjustmentAction: record.hedgeReport.deltaStatus?.adjustmentAction,
           adjustmentResult: record.hedgeReport.adjustmentResult,
+          hedgeCapacity: record.hedgeReport.hedgeCapacity || null,
           accountExists: record.hedgeReport.perpStatus?.accountExists,
           accountNeedsDeposit: record.hedgeReport.perpStatus?.accountNeedsDeposit,
           marginAvailableUsd: record.hedgeReport.perpStatus?.marginAvailableUsd,

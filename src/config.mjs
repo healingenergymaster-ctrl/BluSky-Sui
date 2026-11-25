@@ -98,7 +98,9 @@ export const SUI_CONFIG = {
     market: 'SUI-PERP',
     targetLeverage: Number(process.env.HEDGE_LEVERAGE || 1.0), // 1x Short
     deltaDriftTolerancePct: Number(process.env.DELTA_DRIFT_TOLERANCE_PCT || 5.0), // Re-hedge when delta drifts >5%
-    rehedgeMinSuiAmount: Number(process.env.REHEDGE_MIN_SUI_AMOUNT || 10.0), // Minimum adjustment size in SUI
+    rehedgeMinSuiAmount: Number(process.env.REHEDGE_MIN_SUI_AMOUNT || 2.0), // Minimum adjustment size in SUI (exchange min 1 SUI)
+    orderSlippagePct: Number(process.env.BLUEFIN_ORDER_SLIPPAGE_PCT || 0.5), // Bounded IOC order slippage band
+    lowMarginBufferWarningPct: Number(process.env.BLUEFIN_LOW_MARGIN_WARNING_PCT || 25.0),
     fundingRateIntervalHours: 8
   },
 

@@ -6,7 +6,7 @@ import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { normalizeStructTag } from '@mysten/sui/utils';
 import { SUI_CONFIG } from '../config.mjs';
 import { TURBOS_MAINNET_CONTRACTS } from '../services/turbos.mjs';
-import { computeCetusFlashSwapAndAddPlan } from '../strategy/rebalanceMath.mjs';
+import { computeCetusFlashSwapAndAddPlan, computeSingleSwapSlippageBounds } from '../strategy/rebalanceMath.mjs';
 
 const isValidSuiObjectId = (id) => typeof id === 'string' && /^0x[0-9a-fA-F]{1,64}$/.test(id) && id.length >= 34;
 const U64_MAX = 18446744073709551615n;
@@ -446,6 +446,7 @@ export class RebalancePtbBuilder {
     vaultCallPackageId = SUI_CONFIG.vault.callPackageId || SUI_CONFIG.vault.packageId,
     operatorCapId,
     poolId = null,
+    exitInUsdc = false,
     gasBudget = 120000000
   }) {
     if (!isValidSuiObjectId(userAddress)) {
@@ -617,6 +618,7 @@ export class RebalancePtbBuilder {
     vaultCallPackageId = SUI_CONFIG.vault.callPackageId || SUI_CONFIG.vault.packageId,
     operatorCapId,
     poolId = null,
+    exitInUsdc = false,
     gasBudget = 120000000
   }) {
     if (!isValidSuiObjectId(userAddress)) {
@@ -709,10 +711,59 @@ export class RebalancePtbBuilder {
       ]
     });
 
-    tx.transferObjects([outCoinA, outCoinB], userAddress);
+    let estOutUsdc = isUsdcCoinB ? Number(estOutB) / 1e6 : Number(estOutA) / 1e6;
+    let estOutSui = isUsdcCoinB ? Number(estOutA) / 1e9 : Number(estOutB) / 1e9;
+    const suiEstRaw = isUsdcCoinB ? estOutA : estOutB;
+    const shouldSwapToUsdc = Boolean(exitInUsdc) && suiEstRaw > 0n;
 
-    const estOutUsdc = isUsdcCoinB ? Number(estOutB) / 1e6 : Number(estOutA) / 1e6;
-    const estOutSui = isUsdcCoinB ? Number(estOutA) / 1e9 : Number(estOutB) / 1e9;
+    if (shouldSwapToUsdc) {
+      const a2b = isUsdcCoinB;
+      const suiType = isUsdcCoinB ? coinTypeA : coinTypeB;
+      const usdcType = isUsdcCoinB ? coinTypeB : coinTypeA;
+      const suiCoin = isUsdcCoinB ? outCoinA : outCoinB;
+      const usdcCoin = isUsdcCoinB ? outCoinB : outCoinA;
+      const { sqrtPriceLimit, minSwapOutRaw, estimatedSwapOutRaw } = computeSingleSwapSlippageBounds({
+        swapAmountRaw: suiEstRaw,
+        a2b,
+        poolSqrtPriceX64: pool.sqrtPriceX64,
+        poolLiquidity: pool.liquidity,
+        feeRateBps: pool.feeRate || 500,
+        slippagePct: 2.5
+      });
+
+      const [suiVal] = tx.moveCall({ target: '0x2::coin::value', typeArguments: [suiType], arguments: [suiCoin] });
+      const fn = a2b ? 'swap_a_b_with_return_' : 'swap_b_a_with_return_';
+      const [swappedCoin, changeCoin] = tx.moveCall({
+        target: `${turbosPkg}::swap_router::${fn}`,
+        typeArguments: [coinTypeA, coinTypeB, feeType],
+        arguments: [
+          tx.object(targetPoolId),
+          this._appendCoinVec(tx, suiType, suiCoin),
+          suiVal,
+          tx.pure.u64(minSwapOutRaw),
+          tx.pure.u128(BigInt(sqrtPriceLimit)),
+          tx.pure.bool(true),
+          tx.pure.address(userAddress),
+          tx.pure.u64(deadline),
+          tx.object('0x6'),
+          tx.object(this.contracts.Versioned)
+        ]
+      });
+      tx.moveCall({ target: '0x2::coin::join', typeArguments: [usdcType], arguments: [usdcCoin, swappedCoin] });
+      tx.transferObjects([usdcCoin, changeCoin], userAddress);
+
+      estOutUsdc += Number(estimatedSwapOutRaw) / 1e6;
+      estOutSui = 0;
+    } else {
+      tx.transferObjects([outCoinA, outCoinB], userAddress);
+    }
+
+    const steps = [
+      { step: 1, action: 'withdraw_turbos_active', target: `${vaultCallPackageId}::vault::withdraw_turbos_active`, vaultId, liqToRemove: liqToRemove.toString() }
+    ];
+    if (shouldSwapToUsdc) {
+      steps.push({ step: 2, action: 'turbos_swap_to_usdc', target: `${turbosPkg}::swap_router`, poolId: targetPoolId });
+    }
 
     return {
       tx,
@@ -722,14 +773,13 @@ export class RebalancePtbBuilder {
       summary: {
         sharesToBurn: burnBig.toString(),
         liqToRemove: liqToRemove.toString(),
+        exitInUsdc: Boolean(exitInUsdc),
         estOutUsdc,
         estOutSui,
         poolId: targetPoolId,
         vaultCallPackageId
       },
-      steps: [
-        { step: 1, action: 'withdraw_turbos_active', target: `${vaultCallPackageId}::vault::withdraw_turbos_active`, vaultId, liqToRemove: liqToRemove.toString() }
-      ],
+      steps,
       metadata: {
         poolId: targetPoolId,
         vaultId,

@@ -61,6 +61,7 @@ export class HedgingEngine {
       grossApr: options.grossApr ?? clmmAnalysis.metrics?.grossApr,
       inRange: clmmAnalysis.rangeMetrics?.inRange ?? true,
       executeOrders,
+      minOrderSizeSui: options.minOrderSizeSui,
       vaultBreakdown: options.vaultBreakdown || null
     });
   }
@@ -126,6 +127,7 @@ export class HedgingEngine {
       grossApr: Math.round(weightedGrossApr * 10) / 10,
       inRange: vaultEvaluations.some((e) => e.analysis?.rangeMetrics?.inRange),
       executeOrders,
+      minOrderSizeSui: options.minOrderSizeSui,
       vaultBreakdown
     });
   }
@@ -137,6 +139,7 @@ export class HedgingEngine {
     grossApr,
     inRange,
     executeOrders,
+    minOrderSizeSui,
     vaultBreakdown
   }) {
     const [perpStatus, fundingInfo] = await Promise.all([
@@ -144,21 +147,31 @@ export class HedgingEngine {
       this.bluefinService.getFundingRate()
     ]);
 
+    const effectiveMinOrderSui = minOrderSizeSui ?? SUI_CONFIG.hedging.rehedgeMinSuiAmount;
     const deltaStatus = evaluateDeltaHedgeStatus(
       spotMetrics.spotDeltaSui,
       perpStatus.shortSizeSui,
       currentPrice,
       SUI_CONFIG.hedging.deltaDriftTolerancePct,
-      SUI_CONFIG.hedging.rehedgeMinSuiAmount
+      effectiveMinOrderSui
     );
 
     let adjustmentResult = null;
     if (deltaStatus.requiresRehedge && executeOrders) {
-      adjustmentResult = await this.bluefinService.executeHedgeAdjustment(
+      if (this._rehedgeLock) {
+        await this._rehedgeLock.catch(() => {});
+      }
+      const p = this.bluefinService.executeHedgeAdjustment(
         deltaStatus.adjustmentAction,
         deltaStatus.adjustmentAmountSui,
         currentPrice
       );
+      this._rehedgeLock = p;
+      try {
+        adjustmentResult = await p;
+      } finally {
+        if (this._rehedgeLock === p) this._rehedgeLock = null;
+      }
     }
 
     const clmmAssetsUsd = spotMetrics.spotDeltaUsd + spotMetrics.usdcHeld;
@@ -166,6 +179,32 @@ export class HedgingEngine {
       ? perpStatus.totalAccountValueUsd
       : (perpStatus.marginAllocatedUsd + perpStatus.unrealizedPnlUsd + perpStatus.fundingAccruedUsd);
     const totalPortfolioValueUsd = clmmAssetsUsd + accruedFeesUsd + perpEquityUsd;
+
+    const leverage = SUI_CONFIG.hedging.targetLeverage || 1.0;
+    const safetyFactor = 1.5;
+    const marginAvailableUsd = Math.max(0, Number(perpStatus.marginAvailableUsd || 0));
+    const totalAccountValueUsd = Math.max(0, Number(perpEquityUsd || 0));
+    const shortNotionalUsd = Math.max(0, Number(perpStatus.notionalUsd || 0));
+    const requiredShortMarginUsd = shortNotionalUsd / leverage;
+    const marginBufferPct = requiredShortMarginUsd > 0
+      ? Math.round(((totalAccountValueUsd - requiredShortMarginUsd) / requiredShortMarginUsd) * 1000) / 10
+      : (marginAvailableUsd > 0 ? 100 : 0);
+    const maxHedgeableNewDepositUsd = marginAvailableUsd > 0
+      ? Math.round(((marginAvailableUsd * leverage * 2) / safetyFactor) * 100) / 100
+      : 0;
+    const lowMarginWarning = Boolean(
+      executeOrders &&
+      perpStatus.shortSizeSui > 0 &&
+      marginBufferPct < (SUI_CONFIG.hedging.lowMarginBufferWarningPct || 25.0)
+    );
+    const hedgeCapacity = {
+      marginAvailableUsd: Math.round(marginAvailableUsd * 100) / 100,
+      totalAccountValueUsd: Math.round(totalAccountValueUsd * 100) / 100,
+      maxHedgeableNewDepositUsd,
+      marginBufferPct,
+      lowMarginWarning,
+      minOrderSui: effectiveMinOrderSui
+    };
 
     let dynamicApr = grossApr !== undefined ? { grossApr } : null;
     if (!dynamicApr) {
@@ -189,6 +228,7 @@ export class HedgingEngine {
       fundingInfo,
       deltaStatus,
       adjustmentResult,
+      hedgeCapacity,
       vaultBreakdown,
       portfolio: {
         clmmAssetsUsd: Math.round(clmmAssetsUsd * 100) / 100,

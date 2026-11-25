@@ -11,6 +11,7 @@ import {
   BluefinRequestSigner,
   OrderSide,
   OrderType,
+  OrderTimeInForce,
   makeSigner
 } from '@bluefin-exchange/pro-sdk';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -58,6 +59,19 @@ export function quantizeOrderQuantity(amountSui, minQty = 1, stepSize = 1) {
   const rounded = Number((steps * safeStep).toFixed(6));
   if (rounded < minQty) return 0;
   return rounded;
+}
+
+/**
+ * Quantizes an order limit price conservatively onto Bluefin's discrete tickSize.
+ */
+export function quantizeLimitPrice(rawPrice, tickSize = 0.0001, side = 'SHORT') {
+  const price = Number(rawPrice);
+  const tick = tickSize > 0 ? Number(tickSize) : 0.0001;
+  if (!Number.isFinite(price) || price <= 0) return 0;
+  const steps = side === 'SHORT'
+    ? Math.floor(price / tick)
+    : Math.ceil(price / tick);
+  return Math.max(tick, Number((steps * tick).toFixed(6)));
 }
 
 /**
@@ -500,9 +514,10 @@ export class BluefinService {
     }
 
     // LIVE Bluefin Pro execution path
-    const [rules, livePos] = await Promise.all([
+    const [rules, livePos, ticker] = await Promise.all([
       this.getMarketRules(),
-      this.getPerpPosition(currentPrice)
+      this.getPerpPosition(currentPrice),
+      fetchLivePerpFundingRate(this.market).catch(() => null)
     ]);
 
     if (!livePos.accountExists || livePos.accountNeedsDeposit) {
@@ -559,13 +574,26 @@ export class BluefinService {
     const isReduce = action === 'DECREASE_SHORT';
     const orderSide = isReduce ? OrderSide.Long : OrderSide.Short;
     const clientOrderId = `blusky-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const slippagePct = Math.max(0.1, Math.min(5, Number(SUI_CONFIG.hedging.orderSlippagePct || 0.5)));
+    const bookRefPrice = isReduce
+      ? (ticker?.bestAsk > 0 ? ticker.bestAsk : (livePos.currentPrice || currentPrice))
+      : (ticker?.bestBid > 0 ? ticker.bestBid : (livePos.currentPrice || currentPrice));
+    const boundedPrice = bookRefPrice > 0
+      ? quantizeLimitPrice(
+          bookRefPrice * (isReduce ? (1 + slippagePct / 100) : (1 - slippagePct / 100)),
+          rules.tickSize,
+          isReduce ? 'LONG' : 'SHORT'
+        )
+      : 0;
+    const useIocLimit = boundedPrice > 0;
 
     const orderResponse = await sdk.createOrder({
       clientOrderId,
       symbol: this.market,
-      type: OrderType.Market,
+      type: useIocLimit ? OrderType.Limit : OrderType.Market,
+      ...(useIocLimit ? { timeInForce: OrderTimeInForce.Ioc } : {}),
       side: orderSide,
-      priceE9: '0',
+      priceE9: useIocLimit ? toE9String(boundedPrice) : '0',
       quantityE9: toE9String(targetQty),
       leverageE9: toE9String(this.leverage),
       isIsolated: false,
@@ -575,21 +603,47 @@ export class BluefinService {
     });
 
     const refreshed = await this.getPerpPosition(currentPrice);
+    const limitNote = useIocLimit ? ` IOC@${boundedPrice.toFixed(4)}` : '';
     const description = isReduce
-      ? `Covered -${targetQty} SUI Short on Bluefin Pro ${this.market} @ ~$${(livePos.currentPrice || currentPrice).toFixed(4)} (New Short: ${refreshed.shortSizeSui} SUI)`
-      : `Opened +${targetQty} SUI ${this.leverage}x Short on Bluefin Pro ${this.market} @ ~$${(livePos.currentPrice || currentPrice).toFixed(4)} (New Short: ${refreshed.shortSizeSui} SUI)`;
+      ? `Covered -${targetQty} SUI Short on Bluefin Pro ${this.market}${limitNote} (New Short: ${refreshed.shortSizeSui} SUI)`
+      : `Opened +${targetQty} SUI ${this.leverage}x Short on Bluefin Pro ${this.market}${limitNote} (New Short: ${refreshed.shortSizeSui} SUI)`;
 
     return {
       status: 'EXECUTED_LIVE',
       action,
       amountSui: targetQty,
       price: livePos.currentPrice || currentPrice,
+      limitPrice: useIocLimit ? boundedPrice : null,
+      orderType: useIocLimit ? 'LIMIT_IOC' : 'MARKET',
       oldSize,
       newSize: refreshed.shortSizeSui,
       newEntryPrice: refreshed.entryPrice,
       clientOrderId,
       orderHash: orderResponse?.data?.orderHash || orderResponse?.data?.id || null,
       description,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Withdraws USDC from the Bluefin Pro margin bank back to the Sui operator wallet.
+   */
+  async withdrawUsdc(amountUsdc) {
+    const parsedAmount = Number(amountUsdc);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      throw new Error(`Invalid USDC withdrawal amount: ${amountUsdc}`);
+    }
+    if (this.walletManager.isEphemeral || !this.walletManager.keypair) {
+      throw new Error('Cannot withdraw USDC: configured signer Keypair is required');
+    }
+    const sdk = await this._ensureAuthenticatedSdk();
+    const amountE9 = toE9String(parsedAmount);
+    await sdk.withdraw('USDC', amountE9);
+    return {
+      status: 'SUBMITTED',
+      amountUsdc: parsedAmount,
+      amountE9,
+      accountAddress: this.getAccountAddress(),
       timestamp: new Date().toISOString()
     };
   }

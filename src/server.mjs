@@ -218,6 +218,85 @@ function buildLiveRecentEvents(vaultSnapshot, monitorStatus, currentPrice) {
   return events.length > 0 ? events : null;
 }
 
+let immediateHedgeSyncInflight = null;
+
+async function triggerImmediateHedgeSync(reason = 'vault_tx') {
+  if (SUI_CONFIG.executionMode !== 'LIVE' || !SUI_CONFIG.hedging.enabled) {
+    return null;
+  }
+  if (immediateHedgeSyncInflight) {
+    return immediateHedgeSyncInflight;
+  }
+  immediateHedgeSyncInflight = (async () => {
+    try {
+      const catalog = getVaultCatalog();
+      const entries = [];
+      for (const vCfg of Object.values(catalog)) {
+        if (!vCfg?.objectId) continue;
+        const dexService = vCfg.dex === 'turbos' ? turbosService : defaultCetusService;
+        const snap = await dexService.getVaultSnapshot(vCfg.objectId).catch(() => null);
+        if (!snap?.positionNftId || !snap?.pool) continue;
+        const analysis = await dexService.analyzePosition(
+          snap.pool.objectId,
+          snap.position.lowerTick,
+          snap.position.upperTick,
+          snap.positionNftId
+        ).catch(() => null);
+        if (analysis) {
+          entries.push({ vaultCfg: vCfg, liveVaultSnapshot: snap, analysis });
+        }
+      }
+      if (entries.length === 0) return null;
+
+      const report = await hedgingEngine.evaluateMultiVaultHedge(entries, null, {
+        executeOrders: true,
+        minOrderSizeSui: 1.0
+      });
+
+      const existing = readMonitorStatus();
+      if (existing) {
+        const updated = {
+          ...existing,
+          updatedAt: new Date().toISOString(),
+          hedging: {
+            ...(existing.hedging || {}),
+            timestamp: report.timestamp,
+            spotDeltaSui: report.spotMetrics?.spotDeltaSui,
+            spotDeltaUsd: report.spotMetrics?.spotDeltaUsd,
+            perpShortSizeSui: report.perpStatus?.shortSizeSui,
+            perpShortNotionalUsd: report.perpStatus?.notionalUsd,
+            netDeltaSui: report.deltaStatus?.netDeltaSui,
+            netDeltaUsd: report.deltaStatus?.netDeltaUsd,
+            deltaDriftPct: report.deltaStatus?.deltaDriftPct,
+            adjustmentAction: report.deltaStatus?.adjustmentAction,
+            adjustmentResult: report.adjustmentResult,
+            hedgeCapacity: report.hedgeCapacity || null,
+            marginAvailableUsd: report.perpStatus?.marginAvailableUsd,
+            totalAccountValueUsd: report.perpStatus?.totalAccountValueUsd,
+            vaultBreakdown: report.vaultBreakdown
+          }
+        };
+        const tmpPath = `${MONITOR_STATUS_PATH}.tmp`;
+        fs.writeFileSync(tmpPath, JSON.stringify(updated, null, 2));
+        fs.renameSync(tmpPath, MONITOR_STATUS_PATH);
+      }
+      statusCache.clear();
+      if (report?.adjustmentResult) {
+        console.log(`⚡ [Immediate Hedge Sync (${reason})] ${report.adjustmentResult.description}`);
+      } else {
+        console.log(`🛡️ [Immediate Hedge Sync (${reason})] Δ=${report?.deltaStatus?.netDeltaSui?.toFixed(2)} SUI (${report?.deltaStatus?.deltaDriftPct?.toFixed(2)}% drift)`);
+      }
+      return report;
+    } catch (err) {
+      console.warn(`⚠️ [Immediate Hedge Sync (${reason})] skipped:`, err.message);
+      return null;
+    } finally {
+      immediateHedgeSyncInflight = null;
+    }
+  })();
+  return immediateHedgeSyncInflight;
+}
+
 function resolveScenarioPrice(livePrice, scenario) {
   if (scenario === 'drift') {
     return Math.round(livePrice * 0.85 * 10000) / 10000; // -15% drop -> breaches active band!
@@ -361,6 +440,7 @@ async function getLiveState(userAddress = null, vaultKey = null, bypassCache = f
       fundingSource: hedgeReport.fundingInfo.source,
       liquidationPrice: hedgeReport.perpStatus.marginHealth?.liquidationPrice || 0,
       liquidationBufferPct: hedgeReport.perpStatus.marginHealth?.safetyMarginToLiqPct || 0,
+      hedgeCapacity: hedgeReport.hedgeCapacity || null,
       netApy: hedgeReport.apyBreakdown.netMarketNeutralApy
     };
   } else {
@@ -566,7 +646,11 @@ const server = http.createServer(async (req, res) => {
       });
       console.log(`✅ [Live Deposit] user=${displayAddr} digest=${result.digest}`);
       statusCache.clear();
-      sendJson(res, 200, { success: true, result });
+      const hedgeSyncTriggered = SUI_CONFIG.executionMode === 'LIVE' && SUI_CONFIG.hedging.enabled;
+      if (hedgeSyncTriggered) {
+        void triggerImmediateHedgeSync('deposit');
+      }
+      sendJson(res, 200, { success: true, result, hedgeSyncTriggered });
     } catch (err) {
       console.error('❌ [Deposit Execute Error]', err.message);
       sendJson(res, 400, { success: false, error: err.message });
@@ -593,7 +677,8 @@ const server = http.createServer(async (req, res) => {
         vaultId: vaultConfig.objectId,
         vaultCallPackageId: vaultConfig.callPackageId,
         operatorCapId: vaultConfig.operatorCap,
-        poolId: vaultConfig.poolId
+        poolId: vaultConfig.poolId,
+        exitInUsdc: Boolean(payload.exitInUsdc)
       });
       const response = await prepareLivePtbResponse({ ptbResult, action: 'withdraw', userAddress });
       console.log(`🔧 [${vaultConfig.shortLabel} Withdraw Prepare] user=${userAddress.slice(0, 8)}... shares=${shares} estUsdc=${response.summary.estOutUsdc} estSui=${response.summary.estOutSui}`);
@@ -631,7 +716,11 @@ const server = http.createServer(async (req, res) => {
       });
       console.log(`✅ [Live Withdraw] user=${displayAddr} digest=${result.digest}`);
       statusCache.clear();
-      sendJson(res, 200, { success: true, result });
+      const hedgeSyncTriggered = SUI_CONFIG.executionMode === 'LIVE' && SUI_CONFIG.hedging.enabled;
+      if (hedgeSyncTriggered) {
+        void triggerImmediateHedgeSync('withdraw');
+      }
+      sendJson(res, 200, { success: true, result, hedgeSyncTriggered });
     } catch (err) {
       console.error('❌ [Withdraw Execute Error]', err.message);
       sendJson(res, 400, { success: false, error: err.message });

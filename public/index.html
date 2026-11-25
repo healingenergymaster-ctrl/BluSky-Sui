@@ -889,6 +889,11 @@
             </div>
           </div>
 
+          <div id="hedgeMarginStatus" style="margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(255, 255, 255, 0.08); font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span>🛡️ Bluefin Hedge Margin: <strong id="valMarginCapacity" style="color: var(--cyan);">Checking...</strong></span>
+            <span id="valMarginBufferBadge" style="font-size: 11px; color: var(--text-muted);">Buffer: --</span>
+          </div>
+
           <div id="hedgeNotice" style="display: none; margin-top: 16px; padding: 14px; border-radius: 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3);">
             <div style="font-weight: 700; color: var(--cyan); margin-bottom: 4px;">⚡ Dynamic Delta Re-Hedge Executed!</div>
             <div style="font-size: 12px; color: var(--text-main);" id="hedgeNoticeText">
@@ -1040,6 +1045,10 @@
                 <span style="color: var(--text-muted);">Capital Deployment:</span>
                 <span id="previewDeploymentSplit" style="font-size: 11px; color: var(--text-muted);">CLMM Zap (auto-balanced to active ticks)</span>
               </div>
+              <div class="calc-row">
+                <span style="color: var(--text-muted);">Bluefin 1x Hedge Coverage:</span>
+                <span id="previewHedgeCapacity" style="font-size: 11px; color: var(--cyan);">Checking free margin...</span>
+              </div>
             </div>
 
             <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="executeDepositAction()">
@@ -1061,6 +1070,17 @@
                 <button class="chip-btn" onclick="setWithdrawPct(50)">50%</button>
                 <button class="chip-btn" onclick="setWithdrawPct(75)">75%</button>
                 <button class="chip-btn" onclick="setWithdrawPct(100)">MAX</button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 12px;">
+              <label class="form-label" style="margin-bottom: 6px;">
+                <span>Exit Payout Asset</span>
+                <span style="font-size: 11px; color: var(--text-muted);">Single-Tx Atomic Redemption</span>
+              </label>
+              <div class="chip-group" style="margin-top: 0;">
+                <button type="button" id="btnExitSplit" class="chip-btn" style="border-color: var(--cyan); color: var(--cyan); background: rgba(0, 242, 254, 0.12);" onclick="setWithdrawExitMode(false)">Pro-Rata (USDC + SUI)</button>
+                <button type="button" id="btnExitUsdc" class="chip-btn" onclick="setWithdrawExitMode(true)">100% USDC (Auto-Swap)</button>
               </div>
             </div>
 
@@ -1191,6 +1211,9 @@
     let isLiveVault = false;
     let currentVaultAllocation = null;
     let currentClmmRange = null;
+    let currentHedgeCapacity = null;
+    let currentHedgingEnabled = true;
+    let withdrawExitInUsdc = false;
     let userShares = 0;
 
     // Sui Wallet Standard discovery registry (full @wallet-standard/app spec)
@@ -1667,6 +1690,31 @@
 
       // Hedging Metrics
       const isHedgingOn = data.hedging?.enabled !== false;
+      currentHedgingEnabled = isHedgingOn;
+      currentHedgeCapacity = data.hedging?.hedgeCapacity || data.monitor?.hedging?.hedgeCapacity || null;
+      if (document.getElementById('valMarginCapacity')) {
+        const cap = currentHedgeCapacity;
+        const marginEl = document.getElementById('valMarginCapacity');
+        const bufEl = document.getElementById('valMarginBufferBadge');
+        const statusWrap = document.getElementById('hedgeMarginStatus');
+        if (!isHedgingOn) {
+          marginEl.textContent = 'Disabled (CLMM-Only)';
+          marginEl.style.color = 'var(--text-muted)';
+          if (bufEl) bufEl.textContent = 'No active short margin';
+        } else if (cap) {
+          marginEl.textContent = `$${Number(cap.marginAvailableUsd || 0).toFixed(2)} free (covers ~$${Number(cap.maxHedgeableNewDepositUsd || 0).toFixed(2)} new LP)`;
+          marginEl.style.color = cap.lowMarginWarning ? 'var(--amber)' : 'var(--cyan)';
+          if (bufEl) {
+            bufEl.textContent = cap.lowMarginWarning
+              ? `⚠️ Low Buffer: ${Number(cap.marginBufferPct || 0).toFixed(1)}%`
+              : `Buffer: ${Number(cap.marginBufferPct || 0).toFixed(1)}% · Min Re-hedge: ${cap.minOrderSui || 2} SUI`;
+            bufEl.style.color = cap.lowMarginWarning ? 'var(--amber)' : 'var(--green)';
+          }
+          if (statusWrap) {
+            statusWrap.style.borderColor = cap.lowMarginWarning ? 'rgba(245, 158, 11, 0.45)' : 'rgba(255, 255, 255, 0.08)';
+          }
+        }
+      }
       document.getElementById('valSpotDelta').textContent = '+' + data.hedging.spotDeltaSui.toFixed(2) + ' SUI';
       document.getElementById('valSpotDeltaUsd').textContent = '$' + data.hedging.spotDeltaUsd.toFixed(2) + ' USD';
       document.getElementById('valPerpShort').textContent = isHedgingOn ? '-' + data.hedging.perpShortSizeSui.toFixed(2) + ' SUI' : '0.00 SUI';
@@ -1891,6 +1939,26 @@
       document.getElementById('previewDepositApy').textContent = (apy * 100).toFixed(1) + '%';
       document.getElementById('previewMonthly').textContent = '$' + monthly.toFixed(2) + ' / mo';
       document.getElementById('previewAnnual').textContent = '$' + annual.toFixed(2) + ' / yr';
+
+      const capEl = document.getElementById('previewHedgeCapacity');
+      if (capEl) {
+        if (!currentHedgingEnabled) {
+          capEl.textContent = 'CLMM-Only (Hedging Off)';
+          capEl.style.color = 'var(--text-muted)';
+        } else if (currentHedgeCapacity) {
+          const maxCap = Number(currentHedgeCapacity.maxHedgeableNewDepositUsd || 0);
+          if (amount > maxCap && maxCap >= 0) {
+            capEl.textContent = `⚠️ Covers up to $${maxCap.toFixed(2)} (excess unhedged until margin top-up)`;
+            capEl.style.color = 'var(--amber)';
+          } else {
+            capEl.textContent = `✅ Covered (Auto-hedged on Bluefin · up to $${maxCap.toFixed(2)})`;
+            capEl.style.color = 'var(--green)';
+          }
+        } else {
+          capEl.textContent = '1x Short Synced Automatically';
+          capEl.style.color = 'var(--cyan)';
+        }
+      }
     }
 
     async function resolveSigningWalletForCurrentAddress() {
@@ -2017,9 +2085,10 @@
           });
           const execJson = await execRes.json();
           if (execJson.success) {
+            const syncNote = execJson.hedgeSyncTriggered ? ' · Bluefin 1x Short sync triggered!' : '';
             showNotice(
               'success',
-              `🎉 Live Mainnet Zap Deposit confirmed! Minted ${Number(s.sharesToMint || 0).toLocaleString()} VaultShares.`,
+              `🎉 Live Mainnet Zap Deposit confirmed! Minted ${Number(s.sharesToMint || 0).toLocaleString()} VaultShares${syncNote}`,
               execJson.result.digest
             );
             clientVaultCache.clear();
@@ -2058,6 +2127,21 @@
     }
 
     // Withdraw Logic
+    function setWithdrawExitMode(exitInUsdc) {
+      withdrawExitInUsdc = Boolean(exitInUsdc);
+      const btnSplit = document.getElementById('btnExitSplit');
+      const btnUsdc = document.getElementById('btnExitUsdc');
+      if (btnSplit && btnUsdc) {
+        btnSplit.style.borderColor = !withdrawExitInUsdc ? 'var(--cyan)' : '';
+        btnSplit.style.color = !withdrawExitInUsdc ? 'var(--cyan)' : '';
+        btnSplit.style.background = !withdrawExitInUsdc ? 'rgba(0, 242, 254, 0.12)' : '';
+        btnUsdc.style.borderColor = withdrawExitInUsdc ? 'var(--cyan)' : '';
+        btnUsdc.style.color = withdrawExitInUsdc ? 'var(--cyan)' : '';
+        btnUsdc.style.background = withdrawExitInUsdc ? 'rgba(0, 242, 254, 0.12)' : '';
+      }
+      updateWithdrawPreview();
+    }
+
     function setWithdrawPct(pct) {
       let sharesToBurn = (userShares * pct) / 100;
       if (isLiveVault) {
@@ -2093,7 +2177,9 @@
       const remaining = Math.max(0, userShares - shares);
 
       document.getElementById('previewWithdrawUsd').textContent = '$' + totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' USD';
-      document.getElementById('previewWithdrawSplit').textContent = `$${usdcPart.toFixed(4)} USDC + ${suiPart.toFixed(4)} SUI`;
+      document.getElementById('previewWithdrawSplit').textContent = withdrawExitInUsdc
+        ? `~$${(totalUsd * 0.998).toFixed(4)} USDC (100% USDC Auto-Swap)`
+        : `$${usdcPart.toFixed(4)} USDC + ${suiPart.toFixed(4)} SUI`;
       document.getElementById('previewRemainingShares').textContent = remaining.toLocaleString(undefined, { maximumFractionDigits: isLiveVault ? 0 : 2 }) + ' Shares';
     }
 
@@ -2130,7 +2216,7 @@
           const prepRes = await fetch('/api/vault/withdraw/prepare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAddress: currentWallet.address, shares: String(sharesInt), vault: selectedVaultKey })
+            body: JSON.stringify({ userAddress: currentWallet.address, shares: String(sharesInt), vault: selectedVaultKey, exitInUsdc: withdrawExitInUsdc })
           });
           const prep = await prepRes.json();
           if (!prep.success) {
@@ -2140,9 +2226,12 @@
           }
 
           const s = prep.summary || {};
+          const estDesc = s.exitInUsdc
+            ? `~$${(s.estOutUsdc || 0).toFixed(4)} USDC (100% USDC Auto-Swap)`
+            : `${(s.estOutUsdc || 0).toFixed(4)} USDC + ${(s.estOutSui || 0).toFixed(4)} SUI`;
           showNotice(
             'success',
-            `Est. return: ${(s.estOutUsdc || 0).toFixed(4)} USDC + ${(s.estOutSui || 0).toFixed(4)} SUI. Confirm in ${signingCtx.wallet.name}...`
+            `Est. return: ${estDesc}. Confirm in ${signingCtx.wallet.name}...`
           );
 
           const signed = await signPreparedTxWithWallet(signingCtx, prep.txJson);
@@ -2159,7 +2248,8 @@
           });
           const execJson = await execRes.json();
           if (execJson.success) {
-            showNotice('success', `🎉 Live Mainnet Redemption confirmed! Burned ${sharesInt.toLocaleString()} VaultShares.`, execJson.result.digest);
+            const syncNote = execJson.hedgeSyncTriggered ? ' · Bluefin short rebalance triggered!' : '';
+            showNotice('success', `🎉 Live Mainnet Redemption confirmed! Burned ${sharesInt.toLocaleString()} VaultShares${syncNote}`, execJson.result.digest);
             clientVaultCache.clear();
             fetchStatus({ showLoading: true });
           } else {
