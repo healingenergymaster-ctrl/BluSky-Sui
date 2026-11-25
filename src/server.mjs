@@ -103,7 +103,24 @@ async function getUserVaultShareObjects(userAddress, vaultSnapshot) {
   return listAllOwnedVaultShares(grpcClient, userAddress, vaultSnapshot.vaultId, shareType);
 }
 
-async function prepareLivePtbResponse({ ptbResult, action, userAddress }) {
+function clampGasPriorityMultiplier(value, fallback = 5) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.max(1, Math.min(50, Math.round(num)));
+}
+
+async function prepareLivePtbResponse({ ptbResult, action, userAddress, gasPriorityMultiplier = 5 }) {
+  const priorityMultiplier = clampGasPriorityMultiplier(gasPriorityMultiplier, 5);
+  let baseRefPrice = 100n;
+  try {
+    const rgp = await defaultCetusService.grpcClient.getReferenceGasPrice();
+    const parsed = BigInt(rgp?.referenceGasPrice || 100);
+    if (parsed > 0n) baseRefPrice = parsed;
+  } catch {}
+  const uncappedGasPrice = baseRefPrice * BigInt(priorityMultiplier);
+  const targetGasPrice = uncappedGasPrice > 50000n ? 50000n : uncappedGasPrice;
+  ptbResult.tx.setGasPrice(targetGasPrice);
+
   const txBytes = await ptbResult.tx.build({ client: defaultCetusService.grpcClient });
   const bytesBase64 = toBase64(txBytes);
   const txJson = await ptbResult.tx.toJSON();
@@ -125,6 +142,9 @@ async function prepareLivePtbResponse({ ptbResult, action, userAddress }) {
   const summary = {
     ...ptbResult.summary,
     estGasSui: Math.max(0, netGasMist) / 1e9,
+    gasPriceMist: targetGasPrice.toString(),
+    referenceGasPriceMist: baseRefPrice.toString(),
+    gasPriorityMultiplier: priorityMultiplier,
     requiresOperatorCosign: Boolean(ptbResult?.requiresOperatorCosign)
   };
 
@@ -168,8 +188,20 @@ async function executeSignedLivePtb({ bytesBase64, signature, userAddress, expec
     await grpcClient.waitForTransaction({ digest });
   }
   if (execRes.$kind === 'FailedTransaction' || !txRecord?.status?.success) {
-    const errDetail = JSON.stringify(txRecord?.status?.error || execRes);
-    throw new Error(`On-chain transaction failed${digest ? ` (${digest})` : ''}: ${errDetail}`);
+    const rawErr = txRecord?.status?.error || execRes;
+    const congestedList = rawErr?.CongestedObjects?.objects || [];
+    const errDetail = JSON.stringify(rawErr);
+    if (rawErr?.$kind === 'CongestedObjects' || errDetail.includes('SharedObjectCongestion')) {
+      const objPreview = congestedList.length > 0 ? congestedList.map((id) => `${id.slice(0, 10)}...${id.slice(-6)}`).join(', ') : 'shared DEX pool';
+      const err = new Error(`Shared pool object temporarily congested (${objPreview}). No VaultShares or funds were spent — please retry with higher priority gas.`);
+      err.code = 'SHARED_OBJECT_CONGESTION';
+      err.digest = digest || null;
+      err.congestedObjects = congestedList;
+      throw err;
+    }
+    const err = new Error(`On-chain transaction failed${digest ? ` (${digest})` : ''}: ${errDetail}`);
+    err.digest = digest || null;
+    throw err;
   }
 
   return {
@@ -613,7 +645,12 @@ const server = http.createServer(async (req, res) => {
         operatorCapId: vaultConfig.operatorCap,
         poolId: vaultConfig.poolId
       });
-      const response = await prepareLivePtbResponse({ ptbResult, action: 'deposit', userAddress });
+      const response = await prepareLivePtbResponse({
+        ptbResult,
+        action: 'deposit',
+        userAddress,
+        gasPriorityMultiplier: payload.gasPriorityMultiplier
+      });
       console.log(`🔧 [${vaultConfig.shortLabel} Deposit Prepare] user=${userAddress.slice(0, 8)}... amountUsdc=${amountUsdc} shares=${response.summary.sharesToMint}`);
       sendJson(res, 200, response);
     } catch (err) {
@@ -653,7 +690,13 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { success: true, result, hedgeSyncTriggered });
     } catch (err) {
       console.error('❌ [Deposit Execute Error]', err.message);
-      sendJson(res, 400, { success: false, error: err.message });
+      sendJson(res, 400, {
+        success: false,
+        error: err.message,
+        code: err.code || null,
+        digest: err.digest || null,
+        congestedObjects: err.congestedObjects || null
+      });
     }
     return;
   }
@@ -680,7 +723,12 @@ const server = http.createServer(async (req, res) => {
         poolId: vaultConfig.poolId,
         exitInUsdc: Boolean(payload.exitInUsdc)
       });
-      const response = await prepareLivePtbResponse({ ptbResult, action: 'withdraw', userAddress });
+      const response = await prepareLivePtbResponse({
+        ptbResult,
+        action: 'withdraw',
+        userAddress,
+        gasPriorityMultiplier: payload.gasPriorityMultiplier
+      });
       console.log(`🔧 [${vaultConfig.shortLabel} Withdraw Prepare] user=${userAddress.slice(0, 8)}... shares=${shares} estUsdc=${response.summary.estOutUsdc} estSui=${response.summary.estOutSui}`);
       sendJson(res, 200, response);
     } catch (err) {
@@ -723,7 +771,13 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { success: true, result, hedgeSyncTriggered });
     } catch (err) {
       console.error('❌ [Withdraw Execute Error]', err.message);
-      sendJson(res, 400, { success: false, error: err.message });
+      sendJson(res, 400, {
+        success: false,
+        error: err.message,
+        code: err.code || null,
+        digest: err.digest || null,
+        congestedObjects: err.congestedObjects || null
+      });
     }
     return;
   }

@@ -2048,7 +2048,7 @@
       throw new Error(`${wallet.name} does not expose sui:signTransaction`);
     }
 
-    async function executeDepositAction() {
+    async function executeDepositAction(overrideGasMultiplier = null) {
       if (!currentWallet) {
         openWalletModal();
         return;
@@ -2060,6 +2060,7 @@
       }
 
       if (currentExecutionMode === 'LIVE' && !currentWallet.isDemo) {
+        const gasPriorityMultiplier = (typeof overrideGasMultiplier === 'number' && overrideGasMultiplier > 0) ? Math.min(50, Math.round(overrideGasMultiplier)) : 5;
         const signingCtx = await resolveSigningWalletForCurrentAddress();
         if (!signingCtx) {
           showNotice('error', 'Connect a signing browser wallet (Slush / Sui Wallet) in the Connect Wallet menu to approve Mainnet transactions.');
@@ -2067,12 +2068,12 @@
           return;
         }
 
-        showNotice('success', `Preparing live Mainnet Zap PTB for $${amount.toFixed(2)} USDC...`);
+        showNotice('success', `Preparing live Mainnet Zap PTB for $${amount.toFixed(2)} USDC (${gasPriorityMultiplier}x priority gas)...`);
         try {
           const prepRes = await fetch('/api/vault/deposit/prepare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAddress: currentWallet.address, amountUsdc: amount, vault: selectedVaultKey })
+            body: JSON.stringify({ userAddress: currentWallet.address, amountUsdc: amount, vault: selectedVaultKey, gasPriorityMultiplier })
           });
           const prep = await prepRes.json();
           if (!prep.success) {
@@ -2109,7 +2110,18 @@
             clientVaultCache.clear();
             fetchStatus({ showLoading: true });
           } else {
-            showNotice('error', execJson.error || 'Mainnet transaction failed.');
+            const isCongested = execJson.code === 'SHARED_OBJECT_CONGESTION' || String(execJson.error || '').includes('Congestion');
+            if (isCongested) {
+              const nextMult = Math.min(50, Math.max(15, gasPriorityMultiplier * 3));
+              showNotice(
+                'error',
+                execJson.error || 'Shared pool object congested. No funds were spent.',
+                execJson.digest || null,
+                { label: `⚡ Retry with ${nextMult}x Priority Gas`, onClick: () => executeDepositAction(nextMult) }
+              );
+            } else {
+              showNotice('error', execJson.error || 'Mainnet transaction failed.', execJson.digest || null);
+            }
           }
         } catch (err) {
           showNotice('error', 'Live deposit cancelled or failed: ' + err.message);
@@ -2198,7 +2210,7 @@
       document.getElementById('previewRemainingShares').textContent = remaining.toLocaleString(undefined, { maximumFractionDigits: isLiveVault ? 0 : 2 }) + ' Shares';
     }
 
-    async function executeWithdrawAction() {
+    async function executeWithdrawAction(overrideGasMultiplier = null) {
       if (!currentWallet) {
         openWalletModal();
         return;
@@ -2219,6 +2231,7 @@
           showNotice('error', 'Enter at least 1 whole share to redeem (or click 25% / 50% / 75% / MAX).');
           return;
         }
+        const gasPriorityMultiplier = (typeof overrideGasMultiplier === 'number' && overrideGasMultiplier > 0) ? Math.min(50, Math.round(overrideGasMultiplier)) : 5;
         const signingCtx = await resolveSigningWalletForCurrentAddress();
         if (!signingCtx) {
           showNotice('error', 'Connect a signing browser wallet (Slush / Sui Wallet) in the Connect Wallet menu to approve withdrawals.');
@@ -2226,12 +2239,12 @@
           return;
         }
 
-        showNotice('success', `Preparing live Mainnet Withdraw PTB for ${sharesInt.toLocaleString()} shares...`);
+        showNotice('success', `Preparing live Mainnet Withdraw PTB for ${sharesInt.toLocaleString()} shares (${gasPriorityMultiplier}x priority gas)...`);
         try {
           const prepRes = await fetch('/api/vault/withdraw/prepare', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAddress: currentWallet.address, shares: String(sharesInt), vault: selectedVaultKey, exitInUsdc: withdrawExitInUsdc })
+            body: JSON.stringify({ userAddress: currentWallet.address, shares: String(sharesInt), vault: selectedVaultKey, exitInUsdc: withdrawExitInUsdc, gasPriorityMultiplier })
           });
           const prep = await prepRes.json();
           if (!prep.success) {
@@ -2269,7 +2282,18 @@
             fetchStatus({ showLoading: true });
           } else {
             console.error('[Withdraw Execute Failed]', execJson);
-            showNotice('error', execJson.error || 'Mainnet redemption failed.');
+            const isCongested = execJson.code === 'SHARED_OBJECT_CONGESTION' || String(execJson.error || '').includes('Congestion');
+            if (isCongested) {
+              const nextMult = Math.min(50, Math.max(15, gasPriorityMultiplier * 3));
+              showNotice(
+                'error',
+                execJson.error || 'Shared pool object congested. No VaultShares were burned.',
+                execJson.digest || null,
+                { label: `⚡ Retry with ${nextMult}x Priority Gas`, onClick: () => executeWithdrawAction(nextMult) }
+              );
+            } else {
+              showNotice('error', execJson.error || 'Mainnet redemption failed.', execJson.digest || null);
+            }
           }
         } catch (err) {
           console.error('[Withdraw Flow Error]', err);
@@ -2303,7 +2327,7 @@
     }
 
     let noticeTimer = null;
-    function showNotice(type, msg, txDigest = null) {
+    function showNotice(type, msg, txDigest = null, actionButton = null) {
       const notice = document.getElementById('actionNotice');
       if (noticeTimer) clearTimeout(noticeTimer);
       notice.className = `action-notice notice-${type}`;
@@ -2317,10 +2341,18 @@
         link.textContent = `View Tx (${txDigest.slice(0, 10)}...) ↗`;
         notice.appendChild(link);
       }
+      if (actionButton && typeof actionButton.onClick === 'function') {
+        const retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.textContent = actionButton.label || 'Retry';
+        retryBtn.style.cssText = 'margin-left: 10px; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.55); background: rgba(245, 158, 11, 0.2); color: #fde68a; font-size: 12px; font-weight: 700; cursor: pointer;';
+        retryBtn.onclick = actionButton.onClick;
+        notice.appendChild(retryBtn);
+      }
       notice.style.display = 'block';
       noticeTimer = setTimeout(() => {
         notice.style.display = 'none';
-      }, (txDigest || type === 'error') ? 15000 : 9000);
+      }, actionButton ? 30000 : ((txDigest || type === 'error') ? 15000 : 9000));
     }
 
     function renderDetectedWallets() {
