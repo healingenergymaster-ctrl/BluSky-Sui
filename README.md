@@ -1,97 +1,77 @@
-# BluSky-Sui: Next-Gen Automated DeFi & CLMM Liquidity Vaults
+# BluSky-Sui: Automated Dual-DEX CLMM & Delta-Neutral Vaults on Sui
 
-BluSky-Sui is an autonomous, high-frequency liquidity management and DeFi execution protocol built natively for the Sui Network. Leveraging Sui's **Programmable Transaction Blocks (PTBs)**, **object-centric state model**, and **Mysticeti sub-400ms finality**, BluSky-Sui solves the single biggest problem in concentrated liquidity: **maximizing trading fee APR while eliminating out-of-range capital dormancy and neutralizing impermanent loss**.
+**Live Mainnet Pilot:** [https://app.bluskysui.xyz](https://app.bluskysui.xyz)
+
+BluSky-Sui is an automated concentrated liquidity and delta-neutral hedging protocol built natively for the **Sui Network**. Using **Programmable Transaction Blocks (PTBs)**, **Mysticeti sub-second finality**, and the **Move 2024 object model**, BluSky-Sui manages active `0.05%` SUI/USDC positions across **Cetus Protocol** and **Turbos Finance** while dynamically delta-hedging spot SUI exposure on **Bluefin Pro (`SUI-PERP`)**.
+
+> **Security Status:** Move **v4** contracts (`0x0e6405...0209`) are deployed on Sui Mainnet with **36/36** passing Move unit & adversarial tests (`sui move test --build-env mainnet --path move`). Internal AI-assisted pre-audit hardening has been completed; an **independent Tier-1 Move security audit** and clean fresh-package migration are scheduled prior to scaling public external TVL.
 
 ---
 
-## 🎯 Flagship Products
+## 🎯 Core Architecture
 
-### 1. Automated CLMM Liquidity Vaults ("Arrakis / Gamma for Sui")
-Concentrated liquidity market makers (CLMMs like Turbos & Bluefin) deliver massive APYs (~80%–120%+ on SUI/USDC). BluSky-Sui continuously keeps capital inside the optimal fee-earning zone using atomic PTB rebalancing.
+### 1. Automated Dual-DEX CLMM Vaults (Cetus `0.05%` + Turbos `0.05%`)
+- **Single-Signer Permissionless Zap-In & Exit:** Any wallet can deposit single-sided USDC (`deposit_cetus_active` / `deposit_turbos_active`) to mint transferable `VaultShare<CoinA, CoinB>` objects priced directly from on-chain CLMM liquidity deltas, and redeem via **Pro-Rata (`USDC + SUI`)** or **1-Click `100% USDC (Auto-Swap)`** Zap-Out.
+- **Atomic PTB Rebalancing:** Collects trading fees, routes a **10.0% performance fee** to the treasury (compounding 90%), exits exhausted liquidity, executes slippage-bounded ratio swaps, and opens + locks a new centered CLMM position inside one atomic PTB.
 
-### 2. Delta-Neutral Hedging Layer (Bluefin Perps Integration)
-For liquidity providers who want high yields without exposure to SUI price drops:
-* Automatically computes instantaneous spot SUI delta ($\Delta_{\text{spot}} = \frac{dV}{dP}$).
-* Opens an equal 1x Short on Bluefin Perps (`SUI-PERP`).
-* **Dynamic Delta Re-centering:** As spot price fluctuates and the CLMM pool trades between SUI and USDC, the engine dynamically adjusts the short position to keep $\Delta_{\text{net}} \approx 0$.
-* **Yield Stacking:** Earns high CLMM trading fees (~100% APR) **plus** positive 8h perp funding rate (~16% APR earned by shorts from longs) = **~115%–125% Net Annualized USD Return with Zero Market Beta**.
+### 2. Bluefin Pro Perps Delta-Neutral Hedging
+- Continuously tracks combined spot SUI exposure ($\Delta_{\text{spot}}$) across active Cetus + Turbos vaults.
+- Maintains a matching 1x Short on **Bluefin Pro (`SUI-PERP`)** using tick-quantized, slippage-bounded `LIMIT` + `IOC` orders, with instant post-deposit/withdraw re-hedge sync and live margin headroom telemetry (`maxHedgeableNewDepositUsd`).
 
-### 3. Non-Custodial Sui Move Vault Contracts (`blusky_vault`)
-* Public on-chain Move package (`edition = "2024.beta"`) allowing any user to deposit SUI/USDC.
-* Mints transferable `VaultShare<CoinA, CoinB>` objects that can be held, traded, or used as collateral.
-* **Protocol Monetization:** 10% performance fee on harvested yield automatically routed to the protocol treasury, with the remaining 90% auto-compounded into vault shares.
-* **Separation of Privileges:** `OperatorCap` allows the rebalance bot to harvest, compound, and adjust tick ranges atomically without custody or ability to withdraw user principal.
+### 3. Mainnet Deployment (`Move v4`)
+- **Original Package (`VAULT_PACKAGE_ID`):** `0x5ec95b86aec0b1b3b3277383713ee1815a49303b16216d90688dbda5c8cb710a`
+- **Upgraded Call Package (v4):** `0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209`
+- **Cetus `0.05%` Vault (`cetus005`):** `0xa6ef82cd00e4cbea40bcdbbe2d557590d73dc0c332478ac43ba6e13ea80441ae`
+- **Turbos `0.05%` Vault (`turbos005`):** `0x08c282087feee1850d6b66c0ceb2e6ad0885a58413d1bd561df19fd851aaac27`
 
 ---
 
 ## 📁 Repository Structure
 
-* [CLMM_AUTOMATION_PLAN.md](CLMM_AUTOMATION_PLAN.md): Complete architectural blueprint, math specification, PTB workflows, and phased development roadmap.
-* [SUI_FOUNDATION_GRANT_APPLICATION.md](SUI_FOUNDATION_GRANT_APPLICATION.md): Formal $75,000 Sui Foundation Developer Grant Proposal.
-* `move/`:
-  * `move/Move.toml`: Sui Move 2024 package manifest.
-  * `move/sources/vault.move`: Core non-custodial shared vault, deposit/withdraw logic, `OperatorCap`, and fee distribution.
-  * `move/sources/events.move`: Move event schemas (`DepositEvent`, `WithdrawEvent`, `RebalanceEvent`, `FeeHarvestedEvent`).
-* `public/`:
-  * `public/index.html`: Responsive Web dApp frontend (interactive CLMM range gauge, Bluefin delta visualizer, 1-click deposit calculator, and live market stress-test simulator).
-* `src/`:
-  * `src/server.mjs`: Lightweight Web dApp server and REST API (`/api/status`, `/api/simulate`, `/api/deposit`).
-  * `src/config.mjs`: Central configuration, RPC endpoints, pool IDs, strategy & hedging parameters.
-  * `src/services/wallet.mjs`: Multi-format Sui keypair loader (`suiprivkey...`, hex, base64) with read-only fallback.
-  * `src/strategy/rebalanceMath.mjs`: Pure CLMM math (sqrtPrice <-> price, tick spacing alignment, drift percentage, optimal swap ratio calculation, economic viability validation).
-  * `src/services/turbos.mjs`: Turbos Finance CLMM adapter, pool & position state reader, accrued fee extractor.
-  * `src/ptb/rebalanceBuilder.mjs`: 6-step atomic Programmable Transaction Block builder and simulation engine.
-  * `src/hedging/deltaMath.mjs`: Instantaneous CLMM delta formula, net delta tracking, margin buffer & liquidation math, market-neutral APY breakdown.
-  * `src/services/bluefin.mjs`: Bluefin Perps adapter, position tracker, margin accounting, and 8h funding accrual.
-  * `src/hedging/hedgingEngine.mjs`: Master hedging coordinator synchronizing CLMM spot liquidity with Bluefin short perps.
-  * `src/services/vaultContract.mjs`: Move contract TypeScript SDK and transaction builder.
-  * `src/dashboard/vaultApi.mjs`: Public vault API service, share pricing, and protocol fee accounting.
-  * `src/services/monitor.mjs`: Autonomous position monitoring daemon and evaluation loop.
-  * `src/index.mjs`: Interactive CLI dashboard, daemon entrypoint, and Move vault viewer.
-  * `src/test_connection.mjs`: RPC and Turbos SDK health verification.
-
----
-
-## 🚀 Phased Roadmap
-
-| Phase | Milestone | Status | Objective |
-| :--- | :--- | :--- | :--- |
-| **Phase 1** | **Off-Chain Personal Bot** | ✅ **Complete** | TypeScript bot automating LP on Turbos & Bluefin via PTBs. Real-time drift detection and atomic rebalancing. |
-| **Phase 2** | **Delta-Neutral Hedging** | ✅ **Complete** | Dynamic delta re-centering via Bluefin Perps 1x Short, liquidation buffer tracking, and funding yield capture. |
-| **Phase 3** | **Non-Custodial Move Contracts** | ✅ **Complete** | Move 2024 package minting `VaultShare<SUI, USDC>`, 10% performance fee hooks, operator permissions, and dashboard API. |
-| **Phase 4** | **Sui Foundation Grant & Scale** | ✅ **Complete** | Comprehensive $75,000 Sui Foundation Developer Grant Application, ecosystem co-marketing, and scaling roadmap. |
+- [SUI_FOUNDATION_GRANT_APPLICATION.md](SUI_FOUNDATION_GRANT_APPLICATION.md): Sui Foundation Grant & Security Audit Support application with Mainnet + Testnet proofs.
+- [CLMM_AUTOMATION_PLAN.md](CLMM_AUTOMATION_PLAN.md): Architectural specification, math, and execution roadmap.
+- `move/`:
+  - `move/Move.toml` & `move/Published.toml`: Sui Move 2024 package config and Mainnet (`version = 4`) / Testnet manifests.
+  - `move/sources/vault.move`: Shared `Vault`, `VaultShare`, `OperatorCap`/`VaultAdminCap`, hot-potato rebalance custody, and permissionless Cetus/Turbos active LP functions.
+  - `move/tests/vault_tests.move`: 36 unit & adversarial security tests.
+  - `move/vendor/`: Vendored Mainnet Cetus, Turbos, `integer_mate`, and `move_stl` interfaces for Move builds/tests.
+- `public/index.html`: Live web dApp UI (Wallet Standard + Slush multi-account picker, CLMM monitor, Bluefin margin capacity & Zap-In/Zap-Out controls).
+- `src/`:
+  - `src/start_production.mjs`: Production supervisor running the web server + autonomous monitor together.
+  - `src/server.mjs`: Dashboard REST API (`/api/status`, `/api/vault/deposit/*`, `/api/vault/withdraw/*`), PTB preparation, and instant post-tx Bluefin hedge sync.
+  - `src/services/monitor.mjs`: Dual-DEX autonomous monitoring & atomic rebalance daemon.
+  - `src/ptb/cetusRebalanceBuilder.mjs` & `src/ptb/rebalanceBuilder.mjs`: Atomic Cetus & Turbos rebalance, Zap-In, and 100% USDC Zap-Out PTB builders.
+  - `src/services/cetus.mjs`, `src/services/turbos.mjs`, `src/services/bluefin.mjs`: On-chain Cetus/Turbos adapters & Bluefin Pro `SUI-PERP` execution/funding engine.
+  - `src/hedging/hedgingEngine.mjs` & `src/hedging/deltaMath.mjs`: Multi-vault delta synchronization and margin health calculation.
+  - `src/strategy/rebalanceMath.mjs`: CLMM tick math, dynamic APR estimation, and Q64.64 `sqrtPriceLimit` slippage bounds.
+  - `src/compat/suiClientHook.mjs`: Node 24 ESM compatibility hook bridging legacy `@mysten/sui` v1 exports for Cetus SDK.
 
 ---
 
 ## 🛠️ Quickstart
 
-### 1. Install dependencies
+### 1. Install dependencies & configure `.env`
 ```bash
 npm install
-```
-
-### 2. Configure credentials in `.env`
-```bash
 cp .env.example .env
 ```
 
-### 3. Run Commands
+### 2. Run Commands
 ```bash
-# Launch the Interactive Web dApp Frontend (open http://localhost:3000 in browser)
+# Launch production supervisor (web dashboard + autonomous monitor)
+npm run start:prod
+
+# Launch only the web dashboard locally (http://localhost:3000)
 npm run web
 
-# View on-chain Move Vault metrics, TVL, and protocol fee revenue in terminal
-npm run vault
-
-# Run a single inspection & hedge evaluation cycle
+# Run continuous monitor daemon (or single cycle)
+npm run monitor
 npm run monitor:once
 
-# Run continuous background monitoring daemon (polls every 30s)
-npm run monitor
+# Run Move 2024 unit & adversarial test suite
+sui move test --build-env mainnet --path move
 
-# Test dynamic delta hedge re-centering on Bluefin Perps
+# Simulate Bluefin delta re-hedge or CLMM rebalance drift
 npm run simulate:hedge
-
-# Test automated CLMM atomic PTB tick rebalancing
 npm run simulate:drift
 ```

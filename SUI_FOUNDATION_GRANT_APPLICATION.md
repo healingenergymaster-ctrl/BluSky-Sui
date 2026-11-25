@@ -1,244 +1,100 @@
-# Sui Foundation Developer Grant Application
+# Sui Foundation Developer Grant & Security Audit Support Application
 
 **Project Name:** BluSky-Sui  
-**Category:** DeFi Infrastructure / Concentrated Liquidity & Yield Optimization  
-**Requested Grant Amount:** $75,000 USD (Non-dilutive, milestone-based)  
-**Project Status:** Functional Alpha & Live Testnet Verified (Move 2024 Package & Shared Vault Deployed on Sui Testnet)  
-**Target Networks:** Sui Mainnet & Testnet  
-**Primary Ecosystem Partners:** Cetus Protocol (#1 Sui DEX), Turbos Finance, Bluefin Exchange  
+**Live Mainnet dApp:** [https://app.bluskysui.xyz](https://app.bluskysui.xyz)  
+**Category:** DeFi Infrastructure / Concentrated Liquidity & Delta-Neutral Yield Vaults  
+**Requested Support:** $75,000 USD Milestone-Based Grant *(or Security Audit Subsidy / Co-Funded Tier-1 Move Audit + Mainnet Scaling Support)*  
+**Project Status:** Live Sui Mainnet Production Pilot (Move v4 Shared Vaults, Dual-DEX Cetus & Turbos, Live Bluefin Pro Hedging)  
+**Primary Ecosystem Partners:** Cetus Protocol, Turbos Finance, Bluefin Exchange  
 
 ---
 
 ## 1. Executive Summary
 
-Concentrated Liquidity Market Makers (CLMMs) on Sui are currently delivering the highest trading fee yields in all of Web3, with annual percentage rates ranging from **80% to 120%+ on the SUI/USDC pair**. However, these yields are accompanied by severe operational friction: **price drift causes static positions to fall out of range within days**, freezing fee accrual to 0% and causing severe impermanent loss.
+Concentrated Liquidity Market Makers (CLMMs) on Sui consistently generate some of the highest trading-fee yields in DeFi, yet **price drift frequently pushes static LP ranges out of bounds**, halting fee accrual and amplifying impermanent loss.
 
-**BluSky-Sui** is an autonomous, non-custodial liquidity management protocol natively architected for Sui. It automates CLMM range re-centering, continuous fee compounding, and optional **Delta-Neutral Hedging via Bluefin Perps** across Sui's dominant decentralized exchanges—anchored primarily by **Cetus Protocol** (70%+ market share) alongside **Turbos Finance**.
+**BluSky-Sui** is an automated concentrated liquidity and delta-neutral yield protocol built natively for Sui. It continuously monitors live CLMM ranges across **Cetus Protocol (`0.05%`)** and **Turbos Finance (`0.05%`)**, executes atomic single-PTB tick re-centering with slippage protection, allows permissionless single-signer **USDC Zap-In** and **1-Click 100% USDC Zap-Out** withdrawals, and pairs active spot SUI delta with live **Bluefin Pro (`SUI-PERP`) 1x short hedging**.
 
-By leveraging Sui’s native superpowers—specifically **Programmable Transaction Blocks (PTB)**, **Mysticeti sub-400ms finality**, and the **Move 2024 object model**—BluSky-Sui accomplishes atomic multi-step rebalancing directly on-chain with zero intermediary custody risk, sub-cent gas fees (<$0.01), and zero MEV front-running vulnerability.
+Using **Programmable Transaction Blocks (PTBs)**, **Mysticeti sub-second finality**, and the **Move 2024 object model (`VaultShare<CoinA, CoinB>`)**, BluSky-Sui replaces fragmented multi-transaction rebalancing with single-block atomic execution. The protocol is **live on Sui Mainnet today** at [app.bluskysui.xyz](https://app.bluskysui.xyz) running Move **v4** as an active pilot ahead of an external Tier-1 Move security audit and public TVL scaling.
 
 ---
 
-## 2. Live Testnet Deployment & Verifiable On-Chain Proofs
+## 2. Live Sui Mainnet Deployment & Verifiable On-Chain Proofs
 
-Unlike purely conceptual proposals, BluSky-Sui has already compiled, published, and validated its Move 2024 smart contract package and shared vault object on **Sui Testnet**. 
+Unlike conceptual proposals, BluSky-Sui is actively deployed on **Sui Mainnet** (`Move v4`) with live Cetus 0.05%, Turbos 0.05%, and Bluefin Pro integrations.
 
-Every core capability of the protocol—from initial asset deposit and fractional share splitting to yield compounding and protocol treasury fee routing—has been executed on-chain by Sui validators:
+### A. Published Mainnet Contracts & Live Vaults
 
-### A. Published On-Chain Objects (Sui Testnet)
-
-| Object Role | Object ID / Address | Explorer Link |
+| Role | On-Chain Address / ID | Explorer |
 | :--- | :--- | :--- |
-| **Move 2024 Package** | `0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844` | [SuiVision Package View](https://testnet.suivision.xyz/package/0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844) |
-| **Shared Vault Object** | `0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc` | [SuiVision Vault View](https://testnet.suivision.xyz/object/0x630639ff9b39e8515ce648202a3d919d95ab421aa1f2f6903875964fed0708dc) |
-| **Package UpgradeCap** | `0x37fa2800fc91802c59e2ed4877497211e78cbe68e1644dbd5bca36eb425cd9d8` | [SuiVision UpgradeCap View](https://testnet.suivision.xyz/object/0x37fa2800fc91802c59e2ed4877497211e78cbe68e1644dbd5bca36eb425cd9d8) |
-| **Protocol AdminCap** | `0x137b746c5a05111463c49a6cd0ee8d641679a207c1cfef5d0700cb3f66b5e976` | [SuiVision AdminCap View](https://testnet.suivision.xyz/object/0x137b746c5a05111463c49a6cd0ee8d641679a207c1cfef5d0700cb3f66b5e976) |
-| **Autonomous OperatorCap** | `0x2ba5abe25e4373e72b17c503c3033b83116735714ae4ab179ebd62b5fc64c6c6` | [SuiVision OperatorCap View](https://testnet.suivision.xyz/object/0x2ba5abe25e4373e72b17c503c3033b83116735714ae4ab179ebd62b5fc64c6c6) |
-| **Protocol Fee Treasury** | `0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db` | [SuiVision Treasury Account](https://testnet.suivision.xyz/account/0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db) |
+| **Move Package (`VAULT_PACKAGE_ID`, Original)** | `0x5ec95b86aec0b1b3b3277383713ee1815a49303b16216d90688dbda5c8cb710a` | [SuiVision Package ↗](https://suivision.xyz/package/0x5ec95b86aec0b1b3b3277383713ee1815a49303b16216d90688dbda5c8cb710a) |
+| **Upgraded Call Package (Move v4)** | `0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209` | [SuiVision v4 Package ↗](https://suivision.xyz/package/0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209) |
+| **Cetus 0.05% Vault (`cetus005`)** | `0xa6ef82cd00e4cbea40bcdbbe2d557590d73dc0c332478ac43ba6e13ea80441ae` | [SuiVision Vault ↗](https://suivision.xyz/object/0xa6ef82cd00e4cbea40bcdbbe2d557590d73dc0c332478ac43ba6e13ea80441ae) |
+| **Turbos 0.05% Vault (`turbos005`)** | `0x08c282087feee1850d6b66c0ceb2e6ad0885a58413d1bd561df19fd851aaac27` | [SuiVision Vault ↗](https://suivision.xyz/object/0x08c282087feee1850d6b66c0ceb2e6ad0885a58413d1bd561df19fd851aaac27) |
+| **Protocol Fee Treasury** | `0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db` | [SuiVision Account ↗](https://suivision.xyz/account/0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db) |
+| **Mainnet `UpgradeCap`** | `0x5f63c83a5db8ae679465e946e7fab8275378a36c1eaf3aba41e0f5a095dddd74` | [SuiVision Object ↗](https://suivision.xyz/object/0x5f63c83a5db8ae679465e946e7fab8275378a36c1eaf3aba41e0f5a095dddd74) |
 
----
+### B. Verifiable Mainnet Transactions
 
-### B. 100% Verifiable On-Chain Transaction Lifecycle
-
-The complete architectural lifecycle has been tested and recorded on Sui Testnet blocks:
-
-| Protocol Action | Transaction Digest | On-Chain Verification | Latency & Gas |
-| :--- | :--- | :--- | :--- |
-| **1. Package Publication** | `6jkfDxKuKK9KYToXbpMTDmW2eFagj3Ssj7JAVfDKhSvX` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/6jkfDxKuKK9KYToXbpMTDmW2eFagj3Ssj7JAVfDKhSvX) | Verified bytecode publish; created UpgradeCap |
-| **2. Vault Instantiation** | `CPD872yWoxBDPg9xSxfkiPwt74kdBJcuDqPLHwWiyoQK` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/CPD872yWoxBDPg9xSxfkiPwt74kdBJcuDqPLHwWiyoQK) | Created shared Vault, AdminCap, and OperatorCap |
-| **3. Atomic Deposit & Share Split** | `HW3Jn5RJbsXLnwXaYSqyDJq3mUZhHPUKPTcm9eqh8RvD` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/HW3Jn5RJbsXLnwXaYSqyDJq3mUZhHPUKPTcm9eqh8RvD) | 2,448ms · Minted 100M shares & split 25% child share |
-| **4. Fee Harvest & Treasury Routing** | `AXB5PTTWfs3hQ4ANgUk5vw1Eq9X6Bo2gLHnWEYJoYq31` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/AXB5PTTWfs3hQ4ANgUk5vw1Eq9X6Bo2gLHnWEYJoYq31) | 3,094ms · 10% fee routed to treasury; 90% auto-compounded |
-| **5. Partial Share Redemption & Burn** | `EmSjHzrkVRRcwbcrAYEHeEqH8VG2hPpaJiatnx5nGM2S` | [View on SuiVision ↗](https://testnet.suivision.xyz/txblock/EmSjHzrkVRRcwbcrAYEHeEqH8VG2hPpaJiatnx5nGM2S) | 1,903ms · Burned 25M shares; returned pro-rata assets |
-
----
-
-## 3. The Problem Statement & Market Opportunity
-
-### A. The Inherent Dilemma of Concentrated Liquidity
-In CLMMs (Turbos, Cetus), liquidity providers must concentrate capital into narrow price bands (e.g., ±7% around spot) to achieve 15x–20x capital efficiency. However:
-1. **Out-of-Range Freeze:** When SUI breaks through the band boundaries, 100% of trading fees halt immediately, leaving the LP holding entirely the depreciating asset (100% SUI in a dump) or missing the upside (100% USDC in a pump).
-2. **Operational Overhead:** Active LPs must manually monitor markets 24/7, harvest fees across multiple transactions, swap tokens back to optimal ratios, burn old NFTs, and mint new ones.
-3. **Execution Churn on Legacy Chains:** On EVM (Uniswap V3), rebalancing requires either deploying rigid contract intermediaries or executing 4+ separate transactions, exposing the user to severe slippage and sandwich attacks.
-
-### B. The Market Size on Sui
-* Sui DeFi TVL has surged past **$1B+**, with daily DEX volume regularly exceeding **$100M–$250M**.
-* Yet, over **65% of CLMM positions on Sui are currently out-of-range**, representing millions of dollars in dormant, non-productive liquidity.
-* BluSky-Sui acts as the **"Gamma / Arrakis / Yearn" for the Sui ecosystem**, converting volatile, high-maintenance LPing into passive, institutional-grade automated vaults.
-
----
-
-## 4. Why Sui? (Technical Differentiators)
-
-BluSky-Sui is fundamentally unbuildable with comparable efficiency on EVM or Solana. It directly utilizes three architectural pillars unique to Sui:
-
-### 1. Atomic Programmable Transaction Blocks (PTB)
-On Sui, a client transaction can chain up to 1,024 commands atomically. BluSky-Sui executes an entire rebalance cycle in a **single PTB**:
-
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                    Sui Programmable Transaction Block                      │
-│                                                                            │
-│  1. turbos::collect_fee(PositionNFT) ──────────────> Harvest Accrued Fees  │
-│  2. turbos::decrease_liquidity(PositionNFT, 100%) ─> Withdraw Principal    │
-│  3. turbos::burn(PositionNFT) ─────────────────────> Storage Rebate Credit │
-│  4. dex_router::swap_optimal_ratio(...) ───────────> Perfect Ratio Entry   │
-│  5. turbos::mint(new_lower_tick, new_upper_tick) ──> Mint Concentrated NFT │
-│  6. transfer::public_transfer(NewNFT, Vault/User) ─> Custody Preserved     │
-└────────────────────────────────────────────────────────────────────────────┘
-```
-* **Zero Intermediary Risk:** If any step (such as slippage check or mint) fails, the entire transaction reverts atomically. Funds never leave the owner/vault.
-* **Storage Rebates:** Burning exhausted Position NFTs returns SUI storage rebates, partially subsidizing execution gas.
-
-### 2. Mysticeti Consensus Engine
-With Sui’s Mysticeti consensus delivering sub-400ms finality, atomic rebalances settle before cross-DEX arbitrageurs can front-run or sandwich the rebalance swap.
-
-### 3. Move 2024 Object Model & `OperatorCap`
-* **Transferable `VaultShare<CoinA, CoinB>` Objects:** Depositors receive first-class on-chain objects representing vault shares that can be transferred, held, or integrated as collateral in money markets (Scallop, Navi).
-* **Non-Custodial Privilege Separation:** The automated rebalance daemon holds only an `OperatorCap`. It is cryptographically prohibited from withdrawing investor principal—it can only adjust tick bounds and harvest/compound yields.
-
----
-
-## 5. Product Suite
-
-### Product 1: Dynamic Volatility-Adaptive CLMM Vaults
-* **Dynamic Range Sizing:** Adjusts band widths dynamically (±6% during low-volatility accumulation; ±15% during momentum expansions) using ATR (Average True Range).
-* **Economic Viability Safeguard:** A rebalance is only executed if:
-  $$\text{Rebalance Cost (Slippage + Gas)} < 0.20 \times \text{Unclaimed Accrued Fees}$$
-  This mathematical invariant guarantees that automation never erodes investor returns.
-* **Continuous Auto-Compounding:** Reinvests fee yields continuously to maximize compounded APY.
-
-### Product 2: Delta-Neutral Hedging Layer (Bluefin Perps Integration)
-For liquidity providers who want high yields without exposure to SUI price volatility:
-* Calculates instantaneous CLMM spot delta: $\Delta_{\text{spot}} = \frac{dV}{dP} = x \text{ (SUI quantity held in pool)}$.
-* Automatically maintains an equal 1x Short on Bluefin Perps (`SUI-PERP`).
-* **Dynamic Delta Re-Centering:** When market price moves and the CLMM pool trades between SUI and USDC, the hedging engine automatically resizes the short position to preserve $\Delta_{\text{net}} \approx 0$.
-* **Yield Stacking:** Captures ~100% CLMM fee APR plus positive perpetual funding yield (~16% APR paid by longs to shorts) = **~110%–125% Net Annualized USD Return with Zero Market Beta**.
-
-### Product 3: Dual-DEX Architecture & Smart Yield Routing (Cetus + Turbos)
-Rather than locking liquidity into a single exchange, BluSky-Sui implements a modular adapter architecture:
-* **Dedicated Flagship Vaults:**
-  * **BluSky Cetus SUI/USDC Vault:** Leverages Cetus Protocol’s deep institutional orderbooks ($25M–$60M+ 24h volume) for steady, non-dilutive fee capture.
-  * **BluSky Turbos SUI/USDC Vault:** Targets aggressive yield-farming opportunities and incentive-boosted rewards.
-* **Cross-DEX Yield Routing Engine:** Evaluates live APR spreads between Cetus and Turbos. Incorporates a **15% sustained APR spread threshold over 24 hours** before triggering pool rotations, ensuring cross-DEX rebalancing slippage never outpaces fee yield advantages.
-
----
-
-## 6. Ecosystem Impact & Synergies
-
-| Protocol | Synergy & Value Added |
-| :--- | :--- |
-| **Cetus Protocol (#1 Sui DEX)** | Captures 70%+ of Sui DEX volume; BluSky solves the dormant capital problem by keeping liquidity permanently centered at spot, drastically reducing user slippage. |
-| **Turbos Finance** | Channels targeted automated LP capital to Turbos CLMM pools, driving trading fee velocity and deepening liquidity depth. |
-| **Bluefin Exchange** | Channels continuous hedging volume, increases sustained open interest (OI), and stabilizes perpetual funding rates. |
-| **Scallop & Navi Protocol** | Transferable `VaultShare<SUI_USDC>` tokens create high-yielding collateral assets for lending markets. |
-| **Sui Network Overall** | Establishes a premier native liquidity layer, attracting institutional capital and TVL seeking automated, non-custodial yield. |
-
----
-
-## 7. Project Roadmap & Milestone Deliverables
-
-We are requesting a milestone-based grant of **$75,000 USD** distributed across four transparent deliverables:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Milestone Roadmap                                 │
-│                                                                             │
-│  [M1: Prototype, PTBs & Testnet] ──> [M2: Smart Contract Audit]             │
-│     ($20,000 - COMPLETED ✅)               ($25,000 - 6 Weeks)               │
-│                                                   │                         │
-│                                                   ▼                         │
-│  [M4: Mainnet & Dual-DEX Scaling] <──── [M3: Cetus/Turbos Web App & SDK]    │
-│     ($15,000 - 4 Weeks)                           ($15,000 - 6 Weeks)       │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Milestone 1: Core Execution Engine, PTB Builder & Testnet Validation (COMPLETED ✅)
-* **Grant Amount:** $20,000 (Retroactive / Foundation Verification)
-* **Deliverables Completed:**
-  * Off-chain TypeScript daemon and continuous position monitoring infrastructure.
-  * Turbos CLMM SDK & Cetus SDK (`@cetusprotocol/cetus-sui-clmm-sdk`) modular integration.
-  * 6-step atomic PTB rebalance builder with simulation and live execution modes.
-  * Delta-neutral hedging engine and Bluefin Perps dynamic re-centering math.
-  * Move 2024 non-custodial vault contract (`blusky_vault::vault`) compiled, published, and verified on **Sui Testnet** (`0x9012c6d5deddf25d936ffe5aeadc6849c9488223e7f81cb54f8faced78d23844`).
-  * On-chain lifecycle verified: atomic deposit, fractional share splitting, 10% fee routing to DAO treasury, and partial share redemption.
-* **Verification:** Open-source repository with runnable test suite, interactive web dashboard, and verified SuiVision transaction blocks.
-
-### Milestone 2: Move Contract Security Audit & Hardening (Month 2)
-* **Grant Amount:** $25,000
-* **Deliverables:**
-  * Engage a leading Sui security auditor (e.g., OtterSec, MoveBit, or Zellic) to conduct a full formal audit of `blusky_vault::vault`.
-  * Implement formal verification proofs for invariant safety (e.g., share dilution protection, non-extractable principal).
-  * Publish the full audit report publicly.
-* **Verification:** Published audit report and clean remediation commit on GitHub.
-
-### Milestone 3: Production Web Application, SDK Packaging & Cetus/Turbos Integration (Month 3–4)
-* **Grant Amount:** $15,000
-* **Deliverables:**
-  * Production web interface upgrade using `@mysten/dapp-kit` with multi-wallet standard support (Sui Wallet, Suiet, Nightly, Martian).
-  * Direct PTB adapter wiring linking `blusky_vault::deposit` directly with live Cetus and Turbos CLMM pool positions.
-  * Open-source TypeScript SDK (`@blusky-sui/sdk`) published to npm for third-party protocol and institutional integrations.
-* **Verification:** Production-ready web dApp and publicly accessible npm package.
-
-### Milestone 4: Mainnet Launch, Dual-DEX Pilot Scaling, & Ecosystem Growth (Month 4–5)
-* **Grant Amount:** $15,000
-* **Deliverables:**
-  * Mainnet deployment of audited Move packages.
-  * Seed the flagship Cetus & Turbos SUI/USDC vaults with initial pilot capital ($20,000–$50,000).
-  * Formalize integrations and co-marketing campaigns with Cetus Protocol, Turbos Finance, and Bluefin.
-  * Achieve **$1,000,000+ TVL** within 60 days of public launch.
-* **Verification:** Mainnet package verified on SuiScan/Suivision; TVL verifiable on DefiLlama.
-
----
-
-## 8. Budget & Fund Allocation
-
-| Category | Allocation | Description |
+| Action | Digest | Explorer |
 | :--- | :--- | :--- |
-| **Security Audits** | **$30,000 (40%)** | Tier-1 Move security audit and formal verification. |
-| **Frontend & UI Engineering** | **$18,750 (25%)** | Production dApp with `@mysten/dapp-kit` integration and analytics. |
-| **Infrastructure & Relayers** | **$15,000 (20%)** | Redundant RPC nodes, dedicated rebalancer servers, and indexing services. |
-| **Documentation & Developer Tooling**| **$11,250 (15%)** | Comprehensive developer docs, SDK examples, and ecosystem education. |
-| **Total** | **$75,000** | Non-dilutive grant funding. |
+| **Move v3 Upgrade (Permissionless Active LP)** | `DrYj3weEWqLB84buddiPy1gtAmmXuDYtDo6GJo4fjGCg` | [View Tx ↗](https://suivision.xyz/txblock/DrYj3weEWqLB84buddiPy1gtAmmXuDYtDo6GJo4fjGCg) |
+| **Move v4 Security Hardening Upgrade** | `AfPXqgLXUL7wZm6MWnX23iDk3YhzkMNjvgZjjzd8bLVM` | [View Tx ↗](https://suivision.xyz/txblock/AfPXqgLXUL7wZm6MWnX23iDk3YhzkMNjvgZjjzd8bLVM) |
+| **Mainnet `migrate_version` (`cetus005` + `turbos005` -> v4)** | `C4mmjKo3KFzoyc7PbmxVWu73v6hyVPeq9CJLNtYEstCF` | [View Tx ↗](https://suivision.xyz/txblock/C4mmjKo3KFzoyc7PbmxVWu73v6hyVPeq9CJLNtYEstCF) |
+
+### C. Earlier Sui Testnet Lifecycle Proofs
+
+| Protocol Action | Transaction Digest | Verification |
+| :--- | :--- | :--- |
+| **1. Initial Testnet Publish (`0x9012c6...`)** | `6jkfDxKuKK9KYToXbpMTDmW2eFagj3Ssj7JAVfDKhSvX` | [SuiVision Testnet ↗](https://testnet.suivision.xyz/txblock/6jkfDxKuKK9KYToXbpMTDmW2eFagj3Ssj7JAVfDKhSvX) |
+| **2. Testnet Vault Instantiation (`0x630639...`)** | `CPD872yWoxBDPg9xSxfkiPwt74kdBJcuDqPLHwWiyoQK` | [SuiVision Testnet ↗](https://testnet.suivision.xyz/txblock/CPD872yWoxBDPg9xSxfkiPwt74kdBJcuDqPLHwWiyoQK) |
+| **3. Deposit & `VaultShare` Split** | `HW3Jn5RJbsXLnwXaYSqyDJq3mUZhHPUKPTcm9eqh8RvD` | [SuiVision Testnet ↗](https://testnet.suivision.xyz/txblock/HW3Jn5RJbsXLnwXaYSqyDJq3mUZhHPUKPTcm9eqh8RvD) |
+| **4. Fee Harvest & 10% Treasury Split** | `AXB5PTTWfs3hQ4ANgUk5vw1Eq9X6Bo2gLHnWEYJoYq31` | [SuiVision Testnet ↗](https://testnet.suivision.xyz/txblock/AXB5PTTWfs3hQ4ANgUk5vw1Eq9X6Bo2gLHnWEYJoYq31) |
+| **5. Partial Redemption & Burn** | `EmSjHzrkVRRcwbcrAYEHeEqH8VG2hPpaJiatnx5nGM2S` | [SuiVision Testnet ↗](https://testnet.suivision.xyz/txblock/EmSjHzrkVRRcwbcrAYEHeEqH8VG2hPpaJiatnx5nGM2S) |
 
 ---
 
-## 9. Protocol Business Model & Self-Sustainability
+## 3. Problem Statement & Sui Advantage
 
-BluSky-Sui is designed for indefinite self-sustainability from Day 1:
-* **Zero Management Fee:** 0% deposit or asset-management fees to encourage maximum TVL inflow.
-* **Performance Fee on Pure Yield:** The on-chain vault contract deducts a **10.0% performance fee** strictly from harvested trading fees and funding payments.
-* **Revenue Projections:**
-  * At **$1,000,000 TVL** @ 100% APR = **$100,000 / year** protocol revenue.
-  * At **$10,000,000 TVL** @ 100% APR = **$1,000,000 / year** protocol revenue.
-* Protocol fees are directed to the DAO treasury to continuously fund operations, security audits, and developer incentives without needing recurring external capital.
+1. **CLMM Capital Dormancy:** Tight SUI/USDC concentrated ranges (e.g., `0.05%` fee-tier pools) deliver high APRs only while spot remains in range. When price drifts out of bounds, LP fee yield drops to zero.
+2. **Atomic Execution via Sui PTBs:** BluSky-Sui chains fee collection, treasury fee split (`harvest_and_compound`), `remove_liquidity`, position close/burn (reclaiming SUI storage rebates), bounded ratio swap (`flash_swap` / `swap_router` with explicit `sqrtPriceLimit` and `minOut`), new tick-range open/mint, and hot-potato vault re-lock in **one atomic PTB**.
+3. **Permissionless User Flows:** Independently signed user transactions (`deposit_cetus_active`, `withdraw_cetus_active`, `deposit_turbos_active`, `withdraw_turbos_active`) mint/burn `VaultShare<CoinA, CoinB>` strictly from on-chain pool liquidity invariants (`delta_liq / liq_before`) without requiring an operator co-signature.
 
 ---
 
-## 10. Competitive Landscape Comparison
+## 4. Product Suite (Live on Mainnet Pilot)
 
-BluSky-Sui combines the automated liquidity vault model (Gamma / Kamino) with Sui's unique native primitives:
+### Product 1: Automated Dual-DEX `0.05%` CLMM Vaults (Cetus + Turbos)
+- **Single-Sided USDC Zap-In:** Automatically swaps optimal USDC -> SUI, injects liquidity into the active pool position, and refunds unused dust in one transaction.
+- **Flexible Single-Tx Withdrawals:** Users choose **Pro-Rata (`USDC + SUI`)** with 0% swap fee or **1-Click `100% USDC (Auto-Swap)`** Zap-Out.
+- **Economic Viability Filter:** Automated rebalances only run when net gas + swap cost satisfies protocol cost-to-fee guardrails.
 
-| Feature | Legacy EVM *(Gamma / Arrakis)* | Solana *(Kamino)* | **BluSky-Sui *(Native Sui)*** |
+### Product 2: Bluefin Pro Perps Delta-Neutral Hedging Layer
+- **Live `SUI-PERP` 1x Short Synchronization:** Tracks aggregate spot SUI exposure across Cetus + Turbos vaults and maintains a matching short hedge on **Bluefin Pro Mainnet** via slippage-bounded `LIMIT` + `IOC` orders.
+- **Instant Post-Tx Sync & Margin Transparency:** Every confirmed Mainnet deposit or withdrawal immediately triggers a hedge delta check; the dashboard displays live free margin capacity (`maxHedgeableNewDepositUsd`) and buffer health.
+
+### Product 3: Security Posture & Pre-Audit Hardening
+- Completed an **internal AI-assisted adversarial review** covering `vault.move` and both off-chain PTB builders, remediated all 8 identified issues in **Move v4**, and expanded [vault_tests.move](file:///c:/Projects/BluSky-Sui/move/tests/vault_tests.move) to **36/36 passing tests** (including idle-dilution prevention via `absorb_pro_rata_idle`, active-position guards on legacy entries, `ExpectedPosKey` custody locks, `VersionKey` gating, and tight PTB swap slippage bounds).
+- **Important Transparency:** Internal pre-audit hardening is *not* a substitute for an independent Tier-1 Move security audit. Before scaling public external TVL, BluSky-Sui plans an external formal Move audit, `AdminCap`/`UpgradeCap` multisig governance, and deployment of a clean fresh `original-id` package (so historical `v1–v3` bytecode cannot interact with public vaults).
+
+---
+
+## 5. Roadmap & Requested Support
+
+We welcome **either** a milestone-based ecosystem grant (**$75,000 USD**) **or** **Sui Foundation Security Audit Subsidy / Co-Funded Partner Audit Support** with Cetus, Turbos, and Bluefin:
+
+| Milestone | Status | Scope & Deliverables | Target Allocation |
 | :--- | :--- | :--- | :--- |
-| **Execution** | Multi-tx or custom proxy | Rust anchor program | **1 Atomic PTB** *(all-or-nothing execution)* |
-| **Cost / Rebalance** | $15.00 – $60.00 | $0.05 – $0.15 | **< $0.01** *(subsidized by storage rebates)* |
-| **Finality** | 12 – 15s *(MEV sandwich risk)* | 400 – 800ms | **< 390ms** *(Mysticeti sub-second finality)* |
-| **Delta Hedging** | ❌ None / Manual | ⚠️ Limited | **✅ Automated 1x Short** *(Bluefin Perps)* |
-| **Share Standard** | ERC-20 token | SPL token | **✅ Move 2024 Object** *(`VaultShare`)* |
-| **Operator Safety** | Multisig / Approvals | Authority key | **✅ `OperatorCap`** *(zero access to principal)* |
-
-### Core Differentiators at a Glance:
-* ⚡ **100% Atomic Execution:** PTBs chain fee collection, liquidity exits, ratio swaps, and re-mints into a single transaction block—if slippage limits fail, the entire block reverts with zero loss.
-* 🛡️ **Cryptographic Safety:** The automated keeper bot holds only an `OperatorCap`. It is mathematically impossible for the bot to withdraw or steal user principal.
-* 💰 **Cost Advantage:** Burning exhausted position NFTs recovers Sui storage rebates, keeping net rebalance costs under $0.01.
+| **M1: Core Engine, Dual-DEX Mainnet Pilot & Move v4** | **Completed ✅** | Atomic Cetus & Turbos PTBs, Bluefin Pro IOC hedging, permissionless USDC Zap-In & 100% USDC Zap-Out, Wallet Standard web dApp (`app.bluskysui.xyz`), 36/36 Move tests. | **$20,000** *(Retroactive / Pilot Verification)* |
+| **M2: External Tier-1 Move Audit & Clean Mainnet Launch** | **Next Priority 🎯** | Independent audit by OtterSec / MoveBit / Zellic *(eligible for Sui Foundation audit subsidy / co-funding)*, public report, multisig governance, and clean `original-id` Mainnet vault migration. | **$25,000** *(6 Weeks)* |
+| **M3: Open-Source TypeScript SDK & Partner Integrations** | **Planned** | Published `@blusky-sui/sdk` npm package, Cetus/Turbos vault adapter docs, unified perp/LP NAV settlement keeper, and monitoring telemetry. | **$15,000** *(4–6 Weeks)* |
+| **M4: Public TVL Scaling & Ecosystem Co-Marketing** | **Planned** | Uncapped public launch across Cetus, Turbos, and Bluefin, DefiLlama adapter listing, and TVL growth incentives. | **$15,000** *(4 Weeks)* |
 
 ---
 
-## 11. Conclusion & Request for Support
+## 6. Protocol Economics & Ecosystem Synergy
 
-BluSky-Sui provides the missing infrastructural link required to transition Sui's concentrated liquidity from speculative, high-maintenance farming into institutional, passive capital allocation.
-
-With the core off-chain execution daemon, atomic PTB builder, and Move 2024 contract architecture already implemented and validated on Sui Testnet, grant support from the Sui Foundation will accelerate smart contract auditing, dApp deployment, and ecosystem liquidity scaling.
-
-We look forward to collaborating with the Sui Foundation to solidify Sui as the premier DeFi execution layer in Web3.
-
+- **Fee Model:** `0%` management/deposit/exit fee; **10.0% performance fee** strictly on harvested LP trading yield (`90%` compounded directly back into vault liquidity).
+- **Cetus & Turbos:** Keeps concentrated liquidity centered around spot price, reducing slippage and increasing fee velocity on flagship `0.05%` SUI/USDC pools.
+- **Bluefin Pro:** Drives sustained `SUI-PERP` delta-neutral hedging volume and balanced open interest.
+- **Composability:** Transferable `VaultShare<CoinA, CoinB>` objects enable downstream collateral integrations across Sui money markets.
