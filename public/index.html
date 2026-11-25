@@ -121,6 +121,20 @@
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
 
+    .badge-audit {
+      background: rgba(245, 158, 11, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+
+    .badge-audit:hover {
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(245, 158, 11, 0.55);
+      color: #fde68a;
+    }
+
     /* Wallet Button */
     .wallet-btn {
       display: inline-flex;
@@ -731,6 +745,7 @@
       <div class="header-actions">
         <div class="badge badge-network" id="networkBadge">● Sui Mainnet</div>
         <div class="badge badge-sim" id="execModeBadge">⏳ Loading Mode...</div>
+        <a class="badge badge-audit" id="securityStatusBadge" href="https://suivision.xyz/package/0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209" target="_blank" rel="noopener noreferrer" title="Internal AI-assisted adversarial review fixed 8 issues in Move v4 (0x0e6405...0209); 36/36 unit &amp; adversarial Move tests passing. Independent Tier-1 audit pending before scaling public TVL.">🛡️ Move v4 Pre-Audit Hardened · 36/36 Tests (External Audit Pending)</a>
         <!-- Wallet Connect / Status Button -->
         <button id="walletBtn" class="wallet-btn" onclick="openWalletModal()">
           <span>👛 Connect Sui Wallet</span>
