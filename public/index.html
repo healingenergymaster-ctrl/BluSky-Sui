@@ -603,7 +603,9 @@
       z-index: 9999;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .modal-content {
@@ -612,9 +614,37 @@
       border-radius: 20px;
       width: 100%;
       max-width: 440px;
-      padding: 24px;
+      max-height: 90dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 22px;
       box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75);
       position: relative;
+      margin: auto;
+      touch-action: manipulation;
+    }
+
+    #customAddressInput {
+      flex: 1;
+      min-width: 0;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #fff;
+      font-size: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      outline: none;
+      -webkit-user-select: text;
+      user-select: text;
+      -webkit-appearance: none;
+      appearance: none;
+      touch-action: manipulation;
+    }
+
+    #customAddressInput:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2);
     }
 
     .modal-header {
@@ -1167,7 +1197,7 @@
 
   <!-- Wallet Connection Modal -->
   <div class="modal-overlay" id="walletModal" onclick="closeWalletModalOnBackdrop(event)">
-    <div class="modal-content">
+    <div class="modal-content" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 style="font-size: 17px; font-weight: 700;">Connect Sui Wallet</h3>
         <button class="modal-close" onclick="closeWalletModal()">&times;</button>
@@ -1197,14 +1227,22 @@
         </div>
       </button>
 
+      <!-- Mobile Wallet Browser Tip -->
+      <div id="mobileWalletTip" style="margin-top: 8px; margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); font-size: 12px; color: var(--text-muted); line-height: 1.45;">
+        <div style="font-weight: 700; color: var(--cyan); margin-bottom: 4px;">📱 Using a Phone?</div>
+        <div>Mobile Safari/Chrome cannot run browser extensions. Use <strong>Slush Web Wallet</strong> above (if listed) or open this app inside your mobile wallet app's built-in Browser tab (<strong>Slush</strong>, <strong>Phantom</strong>, <strong>Nightly</strong>, or <strong>Suiet</strong>).</div>
+        <button type="button" class="btn btn-outline" style="margin-top: 8px; padding: 6px 10px; font-size: 11px; width: 100%;" onclick="copyAppUrlForMobile(this)">📋 Copy App URL for Wallet Browser</button>
+      </div>
+
       <!-- Custom Address Input -->
       <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
-          Or Connect with Custom Sui Address:
+        <label for="customAddressInput" style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+          Or Connect with Custom Sui Address (Read-Only):
         </label>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="customAddressInput" placeholder="0x..." style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 12px; font-family: 'JetBrains Mono', monospace; outline: none;">
-          <button class="btn btn-outline" style="padding: 8px 14px; font-size: 12px;" onclick="connectCustomAddress()">Connect</button>
+        <div style="display: flex; gap: 6px; align-items: stretch;">
+          <input type="text" id="customAddressInput" placeholder="0x..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text">
+          <button type="button" class="btn btn-outline" style="padding: 8px 10px; font-size: 12px; white-space: nowrap;" onclick="pasteCustomAddress()">📋 Paste</button>
+          <button type="button" class="btn btn-outline" style="padding: 8px 12px; font-size: 12px; white-space: nowrap;" onclick="connectCustomAddress()">Connect</button>
         </div>
       </div>
     </div>
@@ -1244,7 +1282,15 @@
         const isSui =
           chains.some((c) => String(c).startsWith('sui:')) ||
           Boolean(feats['sui:signTransaction'] || feats['sui:signTransactionBlock'] || feats['standard:connect']);
-        if (isSui && !discoveredStandardWallets.some((x) => x.name === w.name)) {
+        if (!isSui) continue;
+        if (w.id === 'com.mystenlabs.suiwallet') {
+          const webIdx = discoveredStandardWallets.findIndex((x) => x.id === 'com.mystenlabs.suiwallet.web');
+          if (webIdx >= 0) discoveredStandardWallets.splice(webIdx, 1);
+        }
+        const alreadyRegistered = discoveredStandardWallets.some((x) =>
+          (w.id && x.id) ? x.id === w.id : x.name === w.name
+        );
+        if (!alreadyRegistered) {
           discoveredStandardWallets.push(w);
           added.push(w);
         }
@@ -1309,6 +1355,17 @@
     window.addEventListener('DOMContentLoaded', queryStandardWallets);
     window.addEventListener('load', queryStandardWallets);
     queryStandardWallets();
+
+    // Register official Slush Web Wallet (my.slush.app) for mobile Safari/Chrome and extension-free browsers.
+    // It automatically unregisters itself if the Slush browser extension or mobile in-app wallet is present.
+    import('https://esm.sh/@mysten/slush-wallet@2.0.1')
+      .then((mod) => {
+        if (typeof mod?.registerSlushWallet === 'function') {
+          mod.registerSlushWallet('BluSky-Sui', { network: currentNetwork === 'testnet' ? 'testnet' : 'mainnet' });
+          queryStandardWallets();
+        }
+      })
+      .catch(() => {});
 
     // Load saved wallet if any
     const savedAddr = localStorage.getItem('blusky_wallet_address');
@@ -2378,10 +2435,13 @@
         const infoDiv = document.createElement('div');
         const title = document.createElement('div');
         title.style.cssText = 'font-weight: 700; font-size: 14px; color: #ffffff;';
-        title.textContent = `Connect ${w.name} (Detected)`;
+        const isSlushWeb = w.id === 'com.mystenlabs.suiwallet.web';
+        title.textContent = isSlushWeb ? 'Connect Slush Web Wallet (Mobile / Web)' : `Connect ${w.name} (Detected)`;
         const sub = document.createElement('div');
         sub.style.cssText = 'font-size: 12px; color: var(--green);';
-        sub.textContent = 'Wallet Standard · Supports Live Signing';
+        sub.textContent = isSlushWeb
+          ? 'Sign via my.slush.app · No Extension Needed'
+          : 'Wallet Standard · Supports Live Signing';
         infoDiv.appendChild(title);
         infoDiv.appendChild(sub);
         btn.appendChild(iconDiv);
@@ -2544,13 +2604,58 @@
           return;
         }
       }
-      alert(
-        'No Sui Wallet browser extension detected in this browser window.\n\n' +
-        'Common causes:\n' +
-        '1. Open http://localhost:3000 directly in Chrome/Brave/Edge (not an embedded IDE webview).\n' +
-        '2. Make sure your Slush / Sui Wallet / Phantom / Suiet extension is unlocked & allowed on http://localhost:3000.\n' +
-        '3. Hard-refresh the page (Ctrl+Shift+R) after unlocking.'
-      );
+      const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+      if (isMobile) {
+        alert(
+          'No injected Sui mobile wallet detected in this mobile browser.\n\n' +
+          'To connect & sign on a phone:\n' +
+          '1. Tap "Slush Web Wallet" above if shown, OR\n' +
+          '2. Open your Slush / Phantom / Nightly / Suiet mobile app -> tap its built-in Browser / Explore tab -> go to ' + window.location.origin + '.\n\n' +
+          '(Or use the Custom Sui Address box + Paste button below for read-only tracking.)'
+        );
+      } else {
+        alert(
+          'No Sui Wallet browser extension detected on ' + window.location.origin + '.\n\n' +
+          'Common causes:\n' +
+          '1. Open ' + window.location.origin + ' directly in Chrome/Brave/Edge (not an embedded IDE webview).\n' +
+          '2. Make sure your Slush / Sui Wallet / Phantom / Suiet extension is unlocked & allowed on this site.\n' +
+          '3. Hard-refresh the page after unlocking.'
+        );
+      }
+    }
+
+    async function copyAppUrlForMobile(btn) {
+      const url = window.location.origin;
+      try {
+        await navigator.clipboard.writeText(url);
+        if (btn) {
+          const prev = btn.textContent;
+          btn.textContent = `✅ Copied: ${url}`;
+          setTimeout(() => { btn.textContent = prev; }, 2500);
+        }
+      } catch {
+        window.prompt('Copy this URL and open it inside your mobile wallet app browser:', url);
+      }
+    }
+
+    async function pasteCustomAddress() {
+      const el = document.getElementById('customAddressInput');
+      if (!el) return;
+      try {
+        if (navigator.clipboard?.readText) {
+          const text = (await navigator.clipboard.readText() || '').trim();
+          if (text) {
+            el.value = text;
+            el.focus();
+            return;
+          }
+        }
+      } catch {}
+      const manual = window.prompt('Paste your Sui address (0x...):', el.value || '');
+      if (manual !== null) {
+        el.value = manual.trim();
+        el.focus();
+      }
     }
 
     function connectCustomAddress() {
