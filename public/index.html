@@ -1162,7 +1162,7 @@
               </p>
               <div style="background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255, 255, 255, 0.04);">
                 <div style="margin-bottom: 6px; color: #ffffff;">
-                  🏛️ <strong style="color: var(--yellow);">10% Performance Fee:</strong> Sent to the protocol fee treasury (<span id="treasuryAddrDisplay" style="font-family: 'JetBrains Mono', monospace; color: var(--cyan);" title="0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db">0xa81a...f6db</span>).
+                  🏛️ <strong style="color: var(--yellow);">10% Performance Fee:</strong> Sent to the protocol fee treasury (<span id="treasuryAddrDisplayTab" style="font-family: 'JetBrains Mono', monospace; color: var(--cyan);" title="0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db">@bluskysui · 0xa81a...f6db</span>).
                 </div>
                 <div style="color: #ffffff;">
                   🌾 <strong style="color: var(--green);">90% Compounded into NAV:</strong> Reinvested directly into the vault liquidity reserves.
@@ -1237,10 +1237,10 @@
       <!-- Custom Address Input -->
       <div style="margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
         <label for="customAddressInput" style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
-          Or Connect with Custom Sui Address (Read-Only):
+          Or Connect with Custom Sui / SuiNS Address (Read-Only):
         </label>
         <div style="display: flex; gap: 6px; align-items: stretch;">
-          <input type="text" id="customAddressInput" placeholder="0x..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text">
+          <input type="text" id="customAddressInput" placeholder="0x... or @bluskysui" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text">
           <button type="button" class="btn btn-outline" style="padding: 8px 10px; font-size: 12px; white-space: nowrap;" onclick="pasteCustomAddress()">📋 Paste</button>
           <button type="button" class="btn btn-outline" style="padding: 8px 12px; font-size: 12px; white-space: nowrap;" onclick="connectCustomAddress()">Connect</button>
         </div>
@@ -1670,10 +1670,19 @@
         document.getElementById('valPositionMeta').textContent =
           `NFT: ${shortNft} · Ticks [${data.clmm.lowerTick}, ${data.clmm.upperTick}] · Rebalance Lock: ${Boolean(data.clmm.isRebalancing)}`;
       }
-      if (data.vault?.economics?.feeTreasuryAddress && document.getElementById('treasuryAddrDisplay')) {
+      if (data.vault?.economics?.feeTreasuryAddress) {
         const tAddr = data.vault.economics.feeTreasuryAddress;
-        document.getElementById('treasuryAddrDisplay').textContent = `${tAddr.slice(0, 6)}...${tAddr.slice(-4)}`;
-        document.getElementById('treasuryAddrDisplay').title = tAddr;
+        const isBluSkyTreasury = tAddr.toLowerCase() === '0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db';
+        const displayTreasury = isBluSkyTreasury
+          ? `@bluskysui (${tAddr.slice(0, 6)}...${tAddr.slice(-4)})`
+          : `${tAddr.slice(0, 6)}...${tAddr.slice(-4)}`;
+        for (const elId of ['treasuryAddrDisplay', 'treasuryAddrDisplayTab']) {
+          const el = document.getElementById(elId);
+          if (el) {
+            el.textContent = displayTreasury;
+            el.title = isBluSkyTreasury ? `bluskysui.sui → ${tAddr}` : tAddr;
+          }
+        }
       }
 
       // Dual-DEX Yield Routing
@@ -2658,18 +2667,46 @@
       }
     }
 
-    function connectCustomAddress() {
-      const input = document.getElementById('customAddressInput').value.trim();
-      if (!input || !input.startsWith('0x') || input.length < 10) {
+    async function connectCustomAddress() {
+      const raw = document.getElementById('customAddressInput').value.trim();
+      if (!raw) {
+        alert('Please enter a Sui address (0x...) or SuiNS name (@bluskysui / name.sui).');
+        return;
+      }
+      let resolvedAddress = raw;
+      let suinsLabel = null;
+      if (!raw.startsWith('0x')) {
+        const looksLikeSuins = raw.startsWith('@') || raw.toLowerCase().endsWith('.sui') || /^[a-z0-9-]{2,63}$/i.test(raw);
+        if (!looksLikeSuins) {
+          alert('Please enter a valid Sui address (0x...) or SuiNS name (@bluskysui / name.sui).');
+          return;
+        }
+        try {
+          const r = await fetch(`/api/suins/resolve?name=${encodeURIComponent(raw)}`);
+          const j = await r.json();
+          if (!r.ok || !j.success || !j.address) {
+            alert(j.error || `Could not resolve SuiNS name "${raw}".`);
+            return;
+          }
+          resolvedAddress = j.address;
+          suinsLabel = j.handle || j.domain || raw;
+        } catch (err) {
+          alert('Failed to resolve SuiNS name: ' + (err?.message || err));
+          return;
+        }
+      } else if (raw.length < 10) {
         alert('Please enter a valid Sui address (starting with 0x).');
         return;
       }
       activeStandardWallet = null;
-      currentWallet = { address: input, isDemo: false, canSign: false };
-      localStorage.setItem('blusky_wallet_address', input);
+      currentWallet = { address: resolvedAddress, isDemo: false, canSign: false, suinsName: suinsLabel };
+      localStorage.setItem('blusky_wallet_address', resolvedAddress);
       localStorage.setItem('blusky_wallet_mode', 'custom');
       closeWalletModal();
-      showNotice('success', `Connected read-only view for ${input.slice(0, 6)}... (use Browser Wallet to sign transactions)`);
+      const label = suinsLabel
+        ? `${suinsLabel} (${resolvedAddress.slice(0, 6)}...${resolvedAddress.slice(-4)})`
+        : `${resolvedAddress.slice(0, 6)}...${resolvedAddress.slice(-4)}`;
+      showNotice('success', `Connected read-only view for ${label} (use Browser Wallet to sign transactions)`);
       fetchStatus();
     }
 

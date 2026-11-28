@@ -614,6 +614,44 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === '/api/suins/resolve' && req.method === 'GET') {
+    try {
+      const raw = String(reqUrl.searchParams.get('name') || '').trim().toLowerCase();
+      if (!raw) {
+        sendJson(res, 400, { success: false, error: 'Missing SuiNS name' });
+        return;
+      }
+      const cleaned = raw.startsWith('@') ? `${raw.slice(1)}.sui` : (raw.endsWith('.sui') ? raw : `${raw}.sui`);
+      if (!/^[a-z0-9-]{1,63}(\.[a-z0-9-]{1,63})*\.sui$/.test(cleaned)) {
+        sendJson(res, 400, { success: false, error: 'Invalid SuiNS name format' });
+        return;
+      }
+      const gqlRes = await fetch(SUI_CONFIG.graphqlUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: 'query($domain: String!) { nameRecord(name: $domain) { domain target { address } } }',
+          variables: { domain: cleaned }
+        })
+      });
+      const gqlJson = await gqlRes.json();
+      const targetAddr = gqlJson?.data?.nameRecord?.target?.address || null;
+      if (!targetAddr) {
+        sendJson(res, 404, { success: false, error: `SuiNS name ${cleaned} does not resolve to an address` });
+        return;
+      }
+      sendJson(res, 200, {
+        success: true,
+        domain: gqlJson.data.nameRecord.domain || cleaned,
+        handle: `@${cleaned.replace(/\.sui$/, '')}`,
+        address: targetAddr
+      });
+    } catch (err) {
+      sendJson(res, 500, { success: false, error: err.message });
+    }
+    return;
+  }
+
   if (pathname === '/api/user/position' && req.method === 'GET') {
     const address = reqUrl.searchParams.get('address');
     const vaultKey = reqUrl.searchParams.get('vault') || reqUrl.searchParams.get('vaultId');

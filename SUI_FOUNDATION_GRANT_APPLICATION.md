@@ -31,7 +31,7 @@ Unlike conceptual proposals, BluSky-Sui is actively deployed on **Sui Mainnet** 
 | **Upgraded Call Package (Move v4)** | `0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209` | [SuiVision v4 Package ↗](https://suivision.xyz/package/0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209) |
 | **Cetus 0.05% Vault (`cetus005`)** | `0xa6ef82cd00e4cbea40bcdbbe2d557590d73dc0c332478ac43ba6e13ea80441ae` | [SuiVision Vault ↗](https://suivision.xyz/object/0xa6ef82cd00e4cbea40bcdbbe2d557590d73dc0c332478ac43ba6e13ea80441ae) |
 | **Turbos 0.05% Vault (`turbos005`)** | `0x08c282087feee1850d6b66c0ceb2e6ad0885a58413d1bd561df19fd851aaac27` | [SuiVision Vault ↗](https://suivision.xyz/object/0x08c282087feee1850d6b66c0ceb2e6ad0885a58413d1bd561df19fd851aaac27) |
-| **Protocol Fee Treasury** | `0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db` | [SuiVision Account ↗](https://suivision.xyz/account/0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db) |
+| **Protocol Fee Treasury (`@bluskysui` / `bluskysui.sui`)** | `0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db` | [SuiVision Account ↗](https://suivision.xyz/account/0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db) |
 | **Mainnet `UpgradeCap`** | `0x5f63c83a5db8ae679465e946e7fab8275378a36c1eaf3aba41e0f5a095dddd74` | [SuiVision Object ↗](https://suivision.xyz/object/0x5f63c83a5db8ae679465e946e7fab8275378a36c1eaf3aba41e0f5a095dddd74) |
 
 ### B. Verifiable Mainnet Transactions

@@ -23,6 +23,7 @@ BluSky-Sui is an automated concentrated liquidity and delta-neutral hedging prot
 - **Upgraded Call Package (v4):** `0x0e6405f42a9e91d3af5b3f8ddcb6ee66558afaba471233d3e61662fb17c40209`
 - **Cetus `0.05%` Vault (`cetus005`):** `0xa6ef82cd00e4cbea40bcdbbe2d557590d73dc0c332478ac43ba6e13ea80441ae`
 - **Turbos `0.05%` Vault (`turbos005`):** `0x08c282087feee1850d6b66c0ceb2e6ad0885a58413d1bd561df19fd851aaac27`
+- **Protocol Fee Treasury (`@bluskysui` / `bluskysui.sui`):** `0xa81ad397c3aadae2ddcfde5cef96aa21d4f445c918f8d819c5ea757aafa8f6db`
 
 ---
 
